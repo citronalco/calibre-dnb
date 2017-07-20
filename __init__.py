@@ -59,6 +59,8 @@ class DNB_DE(Source):
 	    queries.append('num='+idn+' AND num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
 	    queries.append('num='+idn+' AND num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
 	    queries.append('num='+idn+' AND num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
+	    # try with author and title swapped
+	    queries.append('num='+idn+' AND num='+isbn+' AND per="'+title+'" AND tit="'+authors[0]+'"')
 
 	if idn is not None and title is not None and authors is not None:
 	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(authors)+'"')
@@ -66,30 +68,42 @@ class DNB_DE(Source):
 	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
 	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
 	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
+	    # try with author and title swapped
+	    queries.append('num='+idn+' AND per="'+title+'" AND tit="'+authors[0]+'"')
+
 	if idn is not None and title is not None:
 	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'"')
 	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'"')
-	if idn is not None and authors is not None:
-	    queries.append('num='+idn+' AND per="'+' '.join(authors)+'"')
-	    queries.append('num='+idn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('num='+idn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
+#	if idn is not None and authors is not None:
+#	    queries.append('num='+idn+' AND per="'+' '.join(authors)+'"')
+#	    queries.append('num='+idn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
+#	    queries.append('num='+idn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
 
 	if isbn is not None and title is not None and authors is not None:
 	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(authors)+'"')
 	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
+#	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
 	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
+#	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
+	    # try with author and title swapped
+	    queries.append('num='+isbn+' AND per="'+title+'" AND tit="'+authors[0]+'"')
+
 	if isbn is not None and title is not None:
 	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'"')
-	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'"')
-	if isbn is not None and authors is not None:
-	    queries.append('num='+isbn+' AND per="'+' '.join(authors)+'"')
-	    queries.append('num='+isbn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('num='+isbn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
+#	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'"')
 
-	if isbn is not None and idn is not None:
-	    queries.append('num='+isbn+' AND num='+idn)
+	    # try with author and title swapped
+	    queries.append('num='+isbn+' AND per="'+title+'"')
+
+#	if isbn is not None and authors is not None:
+#	    queries.append('num='+isbn+' AND per="'+' '.join(authors)+'"')
+#	    queries.append('num='+isbn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
+#	    queries.append('num='+isbn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
+	    # try with author and title swapped
+	    #queries.append('num='+isbn+' AND tit="'+authors[0]'"')
+
+#	if isbn is not None and idn is not None:
+#	    queries.append('num='+isbn+' AND num='+idn)
 
 	if idn is not None:
 	    queries.append('num='+idn)
@@ -97,18 +111,25 @@ class DNB_DE(Source):
 	if isbn is not None:
 	    queries.append('num='+isbn)
 
-	if title is not None and authors is not None:
+#	if title is not None and authors is not None:
+	if title is not None and authors is not None and idn is None and isbn is None:
 	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(authors)+'"')
 	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
+#	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
 	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
+#	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
+	    # try with author and title swapped
+	    #queries.append('per="'+title+'" AND tit="'+authors[0]+'"')
+
 	# remove duplicate queries
-	queries=list(set(queries))
+	uniqueQueries=[]
+	for i in queries:
+	    if i not in uniqueQueries:
+		uniqueQueries.append(i)
 
 	# Process queries until we get a useful response
 	results = None
-	for query in queries:
+	for query in uniqueQueries:
 	    query = query + ' AND (mat=books OR mat=serials OR mat=online)'
 	    log.info(query)
 	    results = self.getSearchResults(log, query, timeout)
