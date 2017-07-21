@@ -3,6 +3,8 @@
 A Calibre metadata source plugin that uses the catalogue (https://portal.dnb.de) of the Deutsche Nationalbibliothek (DNB) to retrieve metadata.
 If supports retrieval of DNB-IDN, ISBN, authors, title, tags, pulication date, languages, publisher and cover.
 
+To get the most current version of this plugin just click on "Clone or Download" on the upper right and pick "Download ZIP".
+
 
 ### Requirements:
 
