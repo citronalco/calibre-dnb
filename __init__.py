@@ -12,6 +12,7 @@ from calibre.ebooks.metadata.book.base import Metadata
 import re, datetime
 from urllib import quote
 from lxml import etree
+from collections import OrderedDict
 
 from Queue import Queue, Empty
 
@@ -108,16 +109,15 @@ class DNB_DE(Source):
 	if idn is not None:
 	    queries.append('num='+idn)
 
-	if isbn is not None:
+	if isbn is not None and title is None and authors is None:
 	    queries.append('num='+isbn)
 
-#	if title is not None and authors is not None:
 	if title is not None and authors is not None and idn is None and isbn is None:
 	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(authors)+'"')
 	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-#	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
 	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-#	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
+	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
+	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
 	    # try with author and title swapped
 	    #queries.append('per="'+title+'" AND tit="'+authors[0]+'"')
 
@@ -250,6 +250,7 @@ class DNB_DE(Source):
 	dnb_token = cfg.plugin_prefs[cfg.STORE_NAME][cfg.KEY_SRUTOKEN]
 
 	queryUrl = self.QUERYURL % (dnb_token, quote(query.encode('utf-8')))
+	#log.info('Querying URL: %s' % queryUrl)
 	
 	root = None
 	try:
