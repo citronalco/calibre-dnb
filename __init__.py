@@ -12,7 +12,6 @@ from calibre.ebooks.metadata.book.base import Metadata
 import re, datetime
 from urllib import quote
 from lxml import etree
-from collections import OrderedDict
 
 from Queue import Queue, Empty
 
