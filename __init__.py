@@ -16,14 +16,11 @@ from lxml import etree
 from Queue import Queue, Empty
 
 class DNB_DE(Source):
-    # todo:
-    # - include pubdate's year to identify books (dnb id: "jhr")
-
     name = 'DNB_DE'
     description = _('Downloads metadata from the DNB (Deutsche National Bibliothek). Requires a personal SRU Access Token')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (1, 0, 0)
+    version = (1, 0, 1)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -33,7 +30,7 @@ class DNB_DE(Source):
     cached_cover_url_is_reliable = True
     prefer_results_with_isbn = True
 
-    QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&accessToken=%s&operation=searchRetrieve&query=%s'
+    QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&accessToken=%s&maximumRecords=100&operation=searchRetrieve&query=%s'
     COVERURL = 'https://portal.dnb.de/opac/mvb/cover.htm?isbn=%s'
 
     def config_widget(self):
@@ -47,78 +44,59 @@ class DNB_DE(Source):
     def identify(self, log, result_queue, abort, title=None, authors=None, identifiers={}, timeout=30):
 	idn = identifiers.get('dnb-idn', None)
 	isbn = check_isbn(identifiers.get('isbn', None))
-	if (isbn is None) and (idn is None) and (title is None and authors is None):
-	    log.info("This plugin requires either ISBN, IDN or both Title and Author(s).")
+
+	# ignore unknown authors
+	if authors is "V. A." or authors is "V.A." or authors is "Unknown" or authors is "Unbekannt":
+	    authors = None
+
+	if (isbn is None) and (idn is None) and (title is None) and (authors is None):
+	    log.info("This plugin requires at least either ISBN, IDN, Title or Author(s).")
 	    return None
 
-	# Build all sensible queries, in descending priority
+
 	queries=[]
-	if idn is not None and isbn is not None and title is not None and authors is not None:
-	    queries.append('num='+idn+' AND num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(authors)+'"')
-	    queries.append('num='+idn+' AND num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('num='+idn+' AND num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('num='+idn+' AND num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-	    queries.append('num='+idn+' AND num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-	    # try with author and title swapped
-	    queries.append('num='+idn+' AND num='+isbn+' AND per="'+title+'" AND tit="'+authors[0]+'"')
-
-	if idn is not None and title is not None and authors is not None:
-	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(authors)+'"')
-	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-	    # try with author and title swapped
-	    queries.append('num='+idn+' AND per="'+title+'" AND tit="'+authors[0]+'"')
-
-	if idn is not None and title is not None:
-	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'"')
-	    queries.append('num='+idn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'"')
-#	if idn is not None and authors is not None:
-#	    queries.append('num='+idn+' AND per="'+' '.join(authors)+'"')
-#	    queries.append('num='+idn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-#	    queries.append('num='+idn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-
-	if isbn is not None and title is not None and authors is not None:
-	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(authors)+'"')
-	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-#	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-#	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-	    # try with author and title swapped
-	    queries.append('num='+isbn+' AND per="'+title+'" AND tit="'+authors[0]+'"')
-
-	if isbn is not None and title is not None:
-	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'"')
-#	    queries.append('num='+isbn+' AND tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'"')
-
-	    # try with author and title swapped
-	    queries.append('num='+isbn+' AND per="'+title+'"')
-
-#	if isbn is not None and authors is not None:
-#	    queries.append('num='+isbn+' AND per="'+' '.join(authors)+'"')
-#	    queries.append('num='+isbn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-#	    queries.append('num='+isbn+' AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-	    # try with author and title swapped
-	    #queries.append('num='+isbn+' AND tit="'+authors[0]'"')
-
-#	if isbn is not None and idn is not None:
-#	    queries.append('num='+isbn+' AND num='+idn)
-
 	if idn is not None:
 	    queries.append('num='+idn)
 
-	if isbn is not None and title is None and authors is None:
+	if isbn is not None:
 	    queries.append('num='+isbn)
 
-	if title is not None and authors is not None and idn is None and isbn is None:
-	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(authors)+'"')
-	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=False))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=False))+'"')
-	    queries.append('tit="'+' '.join(self.get_title_tokens(title,strip_subtitle=True))+'" AND per="'+' '.join(self.get_author_tokens(authors,only_first_author=True))+'"')
-	    # try with author and title swapped
-	    #queries.append('per="'+title+'" AND tit="'+authors[0]+'"')
+
+	if idn is None and isbn is None:
+	    authors_v=[]
+	    title_v=[]
+
+	    if authors is not None:
+		authors_v.append(' '.join(authors))
+		authors_v.append(' '.join(self.get_author_tokens(authors,only_first_author=False)))
+		authors_v.append(' '.join(self.get_author_tokens(authors,only_first_author=True)))
+
+	    if title is not None:
+		title_v.append(title)
+		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=False,strip_subtitle=False)))
+		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=False,strip_subtitle=True)))
+
+
+	    if authors is not None and title is not None:
+		for a in authors_v:
+		    for t in title_v:
+			queries.append('tit="'+t+'" AND per="'+a+'"')
+		# try with author and title swapped
+		queries.append('per="'+title+'" AND tit="'+authors[0]+'"')
+
+	    elif authors is not None and title is None:
+		for i in authors_v:
+		    queries.append('per="'+i+'"')
+		queries.append('tit="'+authors[0]+'"')
+
+	    elif authors is None and title is not None:
+		for i in title_v:
+		    queries.append('tit="'+i+'"')
+		queries.append('per="'+title+'"')
+
+	    # Sort queries descending by length (assumption: longer query -> less but better results)
+	    queries.sort(key=len)
+	    queries.reverse()
 
 	# remove duplicate queries
 	uniqueQueries=[]
@@ -131,16 +109,16 @@ class DNB_DE(Source):
 	for query in uniqueQueries:
 	    query = query + ' AND (mat=books OR mat=serials OR mat=online)'
 	    log.info(query)
+
 	    results = self.getSearchResults(log, query, timeout)
-	    # If we get no result that's bad. But too many results are bad too...
-	    if results is not None and len(results)<10:
-		break
 
 	if results is None:
 	    return None
 	
 	log.info("Parsing records")
 	for record in results:
+	    validRecord = True
+
 	    #log.info(etree.tostring(record,pretty_print=True)
 	    # Title
 	    title = record.xpath(".//dc:title",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
@@ -157,20 +135,25 @@ class DNB_DE(Source):
 	    for a in record.xpath(".//dc:creator",namespaces={"dc": "http://purl.org/dc/elements/1.1/"}):
 		author = a.text
 
-		# skip translators, illustrators and editors
-		if author.endswith('[Übers.]') or author.endswith('[Übersetzer]'):
-		    continue
-		if author.endswith('[Ill.]') or author.endswith('[Illustrator]'):
-		    continue
-		if author.endswith('[Hrsg.]') or author.endswith('[Herausgeber]'):
-		    continue
+		skipAuthor =		"[gefeierte Person]","[Begr.]","[Einbandgestalter]","[Übers.]","[Übersetzer]","[Gestalter]"
+		skipRecord = 		"[Erzähler]","[Erz.]","[Spr.]","[Sprecher]"
+		removeBracket = 	"[Verfasser]","[Mitverf.]","[Mitverfasser]","[Mitwirkender]","[Bearb.]","[Verfasser einer Einleitung]","[Verfasser eines Vorworts]","[Verfasser eines Nachworts]","[Verfasser eines Geleitworts]", \
+					"[Illustrator]","[Ill.]","[Designer]","[Fotograf]",\
+					"[Vorr.]","[Nachr.]","[Künstler]","[Fotograf]","[sonst. bet. Person]","[Red.]","[Produzent]","[Zusammenstellender]","[Komponist]","[Hrsg.]", "[Herausgeber]"
 		
-		# remove "[Verfasser]"
-		author = author.replace('[Verfasser]','')
+		if (author.endswith(skipAuthor)):
+		    continue
+		elif (author.endswith(removeBracket)):
+		    author = re.sub(" \[.*\]$","",author)
+		elif (author.endswith(skipRecord)):
+		    validRecord = False
+
 		# remove trailing & heading spaces
 		author = author.strip()
 		log.info("Extracted Author: %s" % author)
 		authors.append(author)
+	    if validRecord is not True:
+		continue
 
 	    if title is None or authors is None:
 		return None
@@ -240,7 +223,6 @@ class DNB_DE(Source):
 	    log.info("Final formatted result: %s" % mi)
 	    result_queue.put(mi)
 
-
     def getSearchResults(self, log, query, timeout=30):
 	log.info('Querying: %s' % query)
 
@@ -249,7 +231,7 @@ class DNB_DE(Source):
 	dnb_token = cfg.plugin_prefs[cfg.STORE_NAME][cfg.KEY_SRUTOKEN]
 
 	queryUrl = self.QUERYURL % (dnb_token, quote(query.encode('utf-8')))
-	#log.info('Querying URL: %s' % queryUrl)
+	log.info('Querying: %s' % queryUrl)
 	
 	root = None
 	try:
