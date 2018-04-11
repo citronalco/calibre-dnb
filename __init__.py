@@ -20,7 +20,7 @@ class DNB_DE(Source):
     description = _('Downloads metadata from the DNB (Deutsche National Bibliothek). Requires a personal SRU Access Token')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (1, 0, 1)
+    version = (1, 0, 2)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -135,7 +135,7 @@ class DNB_DE(Source):
 	    if i not in uniqueQueries:
 		uniqueQueries.append(i)
 
-	# Process queries until we get a useful response
+	# Process queries
 	results = None
 	for query in uniqueQueries:
 	    query = query + ' AND (mat=books OR mat=serials OR mat=online)'
@@ -143,116 +143,116 @@ class DNB_DE(Source):
 
 	    results = self.getSearchResults(log, query, timeout)
 
-	if results is None:
-	    return None
-	
-	log.info("Parsing records")
-	for record in results:
-	    validRecord = True
-
-	    #log.info(etree.tostring(record,pretty_print=True)
-	    # Title
-	    title = record.xpath(".//dc:title",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
-	    title = title.replace('[Elektronische Ressource]','')
-	    # Remove Autors after "/" sign
-	    if title.rfind(' / ')>0:
-		title = title[:title.rfind('/')]
-	    # Remove orginal title in square brackets from the front
-	    title = re.sub(r'^\[.+\] ; ','',title).strip()
-	    log.info("Extracted Title: %s" % title)
-
-	    # Authors
-	    authors = []
-	    for a in record.xpath(".//dc:creator",namespaces={"dc": "http://purl.org/dc/elements/1.1/"}):
-		author = a.text
-
-		skipAuthor =		"[gefeierte Person]","[Begr.]","[Einbandgestalter]","[Übers.]","[Übersetzer]","[Gestalter]"
-		skipRecord = 		"[Erzähler]","[Erz.]","[Spr.]","[Sprecher]"
-		removeBracket = 	"[Verfasser]","[Mitverf.]","[Mitverfasser]","[Mitwirkender]","[Bearb.]","[Verfasser einer Einleitung]","[Verfasser eines Vorworts]","[Verfasser eines Nachworts]","[Verfasser eines Geleitworts]", \
-					"[Illustrator]","[Ill.]","[Designer]","[Fotograf]",\
-					"[Vorr.]","[Nachr.]","[Künstler]","[Fotograf]","[sonst. bet. Person]","[Red.]","[Produzent]","[Zusammenstellender]","[Komponist]","[Hrsg.]", "[Herausgeber]"
-		
-		if (author.endswith(skipAuthor)):
-		    continue
-		elif (author.endswith(removeBracket)):
-		    author = re.sub(" \[.*\]$","",author)
-		elif (author.endswith(skipRecord)):
-		    validRecord = False
-
-		# remove trailing & heading spaces
-		author = author.strip()
-		log.info("Extracted Author: %s" % author)
-		authors.append(author)
-	    if validRecord is not True:
+	    if results is None:
 		continue
+	
+	    log.info("Parsing records")
+	    for record in results:
+		validRecord = True
 
-	    if title is None or authors is None:
-		return None
+		#log.info(etree.tostring(record,pretty_print=True)
+		# Title
+		title = record.xpath(".//dc:title",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
+		title = title.replace('[Elektronische Ressource]','')
+		# Remove Autors after "/" sign
+		if title.rfind(' / ')>0:
+		    title = title[:title.rfind('/')]
+		# Remove orginal title in square brackets from the front
+		title = re.sub(r'^\[.+\] ; ','',title).strip()
+		log.info("Extracted Title: %s" % title)
 
-	    mi = Metadata(title, authors)
+		# Authors
+		authors = []
+		for a in record.xpath(".//dc:creator",namespaces={"dc": "http://purl.org/dc/elements/1.1/"}):
+		    author = a.text
 
-	    # Optional:
-	    try:
-		publisher = record.xpath(".//dc:publisher",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
-		log.info("Extracted Publisher: %s" % publisher)
-		mi.publisher = publisher
-	    except:
-		log.info("No Publisher found")
+		    skipAuthor =		"[gefeierte Person]","[Begr.]","[Einbandgestalter]","[Übers.]","[Übersetzer]","[Gestalter]"
+		    skipRecord = 		"[Erzähler]","[Erz.]","[Spr.]","[Sprecher]"
+		    removeBracket = 		"[Verfasser]","[Mitverf.]","[Mitverfasser]","[Mitwirkender]","[Bearb.]","[Verfasser einer Einleitung]","[Verfasser eines Vorworts]","[Verfasser eines Nachworts]","[Verfasser eines Geleitworts]", \
+						"[Illustrator]","[Ill.]","[Designer]","[Fotograf]",\
+						"[Vorr.]","[Nachr.]","[Künstler]","[Fotograf]","[sonst. bet. Person]","[Red.]","[Produzent]","[Zusammenstellender]","[Komponist]","[Hrsg.]", "[Herausgeber]"
+		
+		    if (author.endswith(skipAuthor)):
+			continue
+		    elif (author.endswith(removeBracket)):
+			author = re.sub(" \[.*\]$","",author)
+		    elif (author.endswith(skipRecord)):
+			validRecord = False
 
-	    try:
-		year = record.xpath(".//dc:date",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
-		log.info("Extracted Year: %s" % year)
-		mi.pubdate = datetime.datetime(int(year), 1, 1)
-	    except:
-		log.info("No Year found")
+		    # remove trailing & heading spaces
+		    author = author.strip()
+		    log.info("Extracted Author: %s" % author)
+		    authors.append(author)
+		if validRecord is not True:
+		    continue
 
-	    try:
-		languages = []
-		for l in record.xpath(".//dc:language",namespaces={"dc": "http://purl.org/dc/elements/1.1/"}):
-		    languages.append(l.text)
-		    log.info("Extraced Language: %s" % l.text)
-		mi.languages = languages
-	    except:
-		log.info("No Language found")
+		if title is None or authors is None:
+		    return None
 
-	    try:
-		urn = record.xpath(".//dc:identifier[@*='tel:URN']",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
-		log.info("Extraced URN: %s" % urn)
-		mi.set_identifier('urn',urn)
-	    except:
-		log.info("No URN found")
+		mi = Metadata(title, authors)
 
-	    try:
-		idn = record.xpath(".//dc:identifier[@*='dnb:IDN']",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
-		log.info("Extracted DNB IDN: %s" %idn)
-		mi.set_identifier('dnb-idn',idn)
-	    except:
-		log.info("No IDN found")
+		# Optional:
+		try:
+		    publisher = record.xpath(".//dc:publisher",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
+		    log.info("Extracted Publisher: %s" % publisher)
+		    mi.publisher = publisher
+		except:
+		    log.info("No Publisher found")
 
-	    try:
-		isbn = record.xpath(".//dc:identifier[@*='tel:ISBN']",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
-		isbnRegex = "(?:ISBN(?:-1[03])?:? )?(?=[-0-9 ]{17}|[-0-9X ]{13}|[0-9X]{10})(?:97[89][- ]?)?[0-9]{1,5}[- ]?(?:[0-9]+[- ]?){2}[0-9X]"
-		match = re.search(isbnRegex, isbn)
-		isbn = match.group()
-		isbn = isbn.replace('-','')
-		log.info("Extracted ISBN: %s" %isbn)
-		mi.set_identifier('dnb-idn',idn)	# required for info in metadata
-		mi.isbn = isbn	# required for cover download
-	    except:
-		log.info("No ISBN found")
+		try:
+		    year = record.xpath(".//dc:date",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
+		    log.info("Extracted Year: %s" % year)
+		    mi.pubdate = datetime.datetime(int(year), 1, 1)
+		except:
+		    log.info("No Year found")
 
-	    try:
-		subjects = []
-		for s in record.xpath(".//dc:subject",namespaces={"dc": "http://purl.org/dc/elements/1.1/"}):
-		    subjects.append(s.text)
-		    log.info("Extracted Subject: %s" % s.text)
-		mi.tags = subjects
-	    except:
-		log.info("No Subjects found")
+		try:
+		    languages = []
+		    for l in record.xpath(".//dc:language",namespaces={"dc": "http://purl.org/dc/elements/1.1/"}):
+			languages.append(l.text)
+			log.info("Extraced Language: %s" % l.text)
+		    mi.languages = languages
+		except:
+		    log.info("No Language found")
 
-	    # put current result's metdata into result queue
-	    log.info("Final formatted result: %s" % mi)
-	    result_queue.put(mi)
+		try:
+		    urn = record.xpath(".//dc:identifier[@*='tel:URN']",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
+		    log.info("Extraced URN: %s" % urn)
+		    mi.set_identifier('urn',urn)
+		except:
+		    log.info("No URN found")
+
+		try:
+		    idn = record.xpath(".//dc:identifier[@*='dnb:IDN']",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
+		    log.info("Extracted DNB IDN: %s" %idn)
+		    mi.set_identifier('dnb-idn',idn)
+		except:
+		    log.info("No IDN found")
+
+		try:
+		    isbn = record.xpath(".//dc:identifier[@*='tel:ISBN']",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
+		    isbnRegex = "(?:ISBN(?:-1[03])?:? )?(?=[-0-9 ]{17}|[-0-9X ]{13}|[0-9X]{10})(?:97[89][- ]?)?[0-9]{1,5}[- ]?(?:[0-9]+[- ]?){2}[0-9X]"
+		    match = re.search(isbnRegex, isbn)
+		    isbn = match.group()
+		    isbn = isbn.replace('-','')
+		    log.info("Extracted ISBN: %s" %isbn)
+		    mi.set_identifier('dnb-idn',idn)	# required for info in metadata
+		    mi.isbn = isbn	# required for cover download
+		except:
+		    log.info("No ISBN found")
+
+		try:
+		    subjects = []
+		    for s in record.xpath(".//dc:subject",namespaces={"dc": "http://purl.org/dc/elements/1.1/"}):
+			subjects.append(s.text)
+			log.info("Extracted Subject: %s" % s.text)
+		    mi.tags = subjects
+		except:
+		    log.info("No Subjects found")
+
+		# put current result's metdata into result queue
+		log.info("Final formatted result: %s" % mi)
+		result_queue.put(mi)
 
     def getSearchResults(self, log, query, timeout=30):
 	log.info('Querying: %s' % query)
