@@ -58,11 +58,7 @@ class DNB_DE(Source):
 	if idn is not None:
 	    queries.append('num='+idn)
 
-	if isbn is not None:
-	    queries.append('num='+isbn)
-
-
-	if idn is None and isbn is None:
+	else:
 	    authors_v=[]
 	    title_v=[]
 
@@ -77,26 +73,61 @@ class DNB_DE(Source):
 		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=False,strip_subtitle=True)))
 
 
+	    # title and author
 	    if authors is not None and title is not None:
 		for a in authors_v:
 		    for t in title_v:
-			queries.append('tit="'+t+'" AND per="'+a+'"')
-		# try with author and title swapped
-		queries.append('per="'+title+'" AND tit="'+authors[0]+'"')
+			if isbn is not None:
+			    queries.append('tit="'+t+'" AND per="'+a+'" AND num="'+isbn+'"')
+			else:
+			    queries.append('tit="'+t+'" AND per="'+a+'"')
 
+		# try with author and title swapped
+		if isbn is not None:
+		    queries.append('per="'+title+'" AND tit="'+authors[0]+'" AND num="'+isbn+'"')
+		else:
+		    queries.append('per="'+title+'" AND tit="'+authors[0]+'"')
+
+
+	    # title but no author
 	    elif authors is not None and title is None:
 		for i in authors_v:
-		    queries.append('per="'+i+'"')
-		queries.append('tit="'+authors[0]+'"')
+		    if isbn is not None:
+			queries.append('per="'+i+'" AND num="'+isbn+'"')
+		    else:
+			queries.append('per="'+i+'"')
 
+		# try with author and title swapped
+		if isbn is not None:
+		    queries.append('tit="'+authors[0]+'" AND num="'+isbn+'"')
+		else:
+		    queries.append('tit="'+authors[0]+'"')
+
+
+	    # author but no title
 	    elif authors is None and title is not None:
 		for i in title_v:
-		    queries.append('tit="'+i+'"')
-		queries.append('per="'+title+'"')
+		    if isbn is not None:
+			queries.append('tit="'+i+'" AND num="'+isbn+'"')
+		    else:
+			queries.append('tit="'+i+'"')
+
+		# try with author and title swapped
+		if isbn is not None:
+		    queries.append('per="'+title+'" AND num="'+isbn+'"')
+		else:
+		    queries.append('per="'+title+'"')
+
+
+	    # as last resort only use isbn
+	    if isbn is not None:
+		queries.append('num='+isbn)
+
 
 	    # Sort queries descending by length (assumption: longer query -> less but better results)
-	    queries.sort(key=len)
-	    queries.reverse()
+	    #queries.sort(key=len)
+	    #queries.reverse()
+
 
 	# remove duplicate queries
 	uniqueQueries=[]
