@@ -8,10 +8,12 @@ __docformat__ = 'en'
 from calibre.ebooks.metadata.sources.base import Source
 from calibre.ebooks.metadata import check_isbn
 from calibre.ebooks.metadata.book.base import Metadata
+from calibre.library.comments import sanitize_comments_html
 
 import re, datetime
 from urllib import quote
 from lxml import etree
+from lxml.etree import tostring
 
 from Queue import Queue, Empty
 
@@ -20,17 +22,18 @@ class DNB_DE(Source):
     description = _('Downloads metadata from the DNB (Deutsche National Bibliothek). Requires a personal SRU Access Token')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (1, 0, 2)
+    version = (2, 0, 0)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
-    touched_fields = frozenset(['title', 'authors', 'publisher', 'pubdate', 'languages', 'tags', 'identifier:urn', 'identifier:idn','identifier:isbn'])
+    touched_fields = frozenset(['title', 'authors', 'publisher', 'pubdate', 'languages', 'tags', 'identifier:urn', 'identifier:idn','identifier:isbn', 'identifier:ddc', 'series', 'series_index', 'comments'])
+    has_html_comments = True
     can_get_multiple_covers = False
     supports_gzip_transfer_encoding = True
     cached_cover_url_is_reliable = True
     prefer_results_with_isbn = True
 
-    QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&accessToken=%s&maximumRecords=100&operation=searchRetrieve&query=%s'
+    QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&accessToken=%s&maximumRecords=100&operation=searchRetrieve&recordSchema=MARC21-xml&query=%s'
     COVERURL = 'https://portal.dnb.de/opac/mvb/cover.htm?isbn=%s'
 
     def config_widget(self):
@@ -137,6 +140,7 @@ class DNB_DE(Source):
 
 	# Process queries
 	results = None
+
 	for query in uniqueQueries:
 	    query = query + ' AND (mat=books OR mat=serials OR mat=online)'
 	    log.info(query)
@@ -145,114 +149,170 @@ class DNB_DE(Source):
 
 	    if results is None:
 		continue
-	
-	    log.info("Parsing records")
-	    for record in results:
-		validRecord = True
 
-		#log.info(etree.tostring(record,pretty_print=True)
+	    log.info("Parsing records")
+
+	    ns = { 'marc21' : 'http://www.loc.gov/MARC21/slim' }
+	    for record in results:
+		#log.info(etree.tostring(record,pretty_print=True))
+
 		# Title
-		title = record.xpath(".//dc:title",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
-		title = title.replace('[Elektronische Ressource]','')
-		# Remove Autors after "/" sign
-		if title.rfind(' / ')>0:
-		    title = title[:title.rfind('/')]
-		# Remove orginal title in square brackets from the front
-		title = re.sub(r'^\[.+\] ; ','',title).strip()
+		title = None
+		for i in record.xpath(".//marc21:datafield[@tag='245']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):	# main title
+		    title = i.text.strip()
+		    break;
+		for i in record.xpath(".//marc21:datafield[@tag='245']/marc21:subfield[@code='b' and string-length(text())>0]",namespaces=ns):	# subtitle 1
+		    title = title + " : " + i.text.strip()
+		    break
+		for i in record.xpath(".//marc21:datafield[@tag='245']/marc21:subfield[@code='n' and string-length(text())>0]",namespaces=ns):	# subtitle 1
+		    title = title + " : " + i.text.strip()
+		    break
+		#for i in record.xpath(".//marc21:datafield[@tag='245']/marc21:subfield[@code='c' and string-length(text())>0]",namespaces=ns):	# subtitle 2
+		#    title = title + " / " + i.text.strip()
+		#    break
+
+		title_sort = None
+		title_sort_regex = re.match('^(.*?)('+chr(152)+'.*'+chr(156)+')?(.*?)$',title)
+		sortword = title_sort_regex.group(2)
+		if sortword:
+		    sortword = ''.join([c for c in sortword if ord(c)!=152 and ord(c)!=156])	# remove sorting word markers
+		    title_sort = ''.join(filter(None,[title_sort_regex.group(1).strip(),title_sort_regex.group(3).strip(),", "+sortword]))
+		    log.info("Extracted Title_Sort: %s" % title_sort)
+
+		title=''.join([c for c in title if ord(c)!=152 and ord(c)!=156])	# remove sorting word markers
 		log.info("Extracted Title: %s" % title)
 
 		# Authors
 		authors = []
-		for a in record.xpath(".//dc:creator",namespaces={"dc": "http://purl.org/dc/elements/1.1/"}):
-		    author = a.text
-
-		    skipAuthor =		"[gefeierte Person]","[Begr.]","[Einbandgestalter]","[Übers.]","[Übersetzer]","[Gestalter]"
-		    skipRecord = 		"[Erzähler]","[Erz.]","[Spr.]","[Sprecher]"
-		    removeBracket = 		"[Verfasser]","[Mitverf.]","[Mitverfasser]","[Mitwirkender]","[Bearb.]","[Verfasser einer Einleitung]","[Verfasser eines Vorworts]","[Verfasser eines Nachworts]","[Verfasser eines Geleitworts]", \
-						"[Illustrator]","[Ill.]","[Designer]","[Fotograf]",\
-						"[Vorr.]","[Nachr.]","[Künstler]","[Fotograf]","[sonst. bet. Person]","[Red.]","[Produzent]","[Zusammenstellender]","[Komponist]","[Hrsg.]", "[Herausgeber]"
-		
-		    if (author.endswith(skipAuthor)):
-			continue
-		    elif (author.endswith(removeBracket)):
-			author = re.sub(" \[.*\]$","",author)
-		    elif (author.endswith(skipRecord)):
-			validRecord = False
-
-		    # remove trailing & heading spaces
-		    author = author.strip()
-		    log.info("Extracted Author: %s" % author)
-		    authors.append(author)
-		if validRecord is not True:
-		    continue
-
-		if title is None or authors is None:
-		    return None
+		author_sort = None
+		for i in record.xpath(".//marc21:datafield[@tag='100']/marc21:subfield[@code='4' and text()='aut']/../marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):	# primary authors
+		    if author_sort is None:
+			author_sort = i.text.strip();
+		    authors.append(i.text.strip())
+		for i in record.xpath(".//marc21:datafield[@tag='700']/marc21:subfield[@code='4' and text()='aut']/../marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):	# secondary authors
+		    authors.append(i.text.strip())
+		log.info("Extracted Authors: %s" % " & ".join(authors))
 
 		mi = Metadata(title, authors)
+		mi.title_sort = title_sort
+		mi.author_sort = author_sort
 
-		# Optional:
-		try:
-		    publisher = record.xpath(".//dc:publisher",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
+		# Comments
+		comments = None
+		for i in record.xpath(".//marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>0]",namespaces=ns):
+		    if i.text.startswith("http://deposit.dnb.de/"):
+			br = self.browser
+			log.info('Downloading Comments from: %s' % i.text)
+			try:
+			    comments = br.open_novisit(i.text, timeout=30).read()
+			    comments = sanitize_comments_html(comments)
+			    log.info('Comments: %s' % comments)
+			    mi.comments = comments
+			    break
+			except:
+			    log.info("Could not download Comments from %s" % i)
+
+		# Publisher Name and Location
+		publisher = None
+		for i in record.xpath(".//marc21:datafield[@tag='264']/marc21:subfield[@code='b' and string-length(text())>0]",namespaces=ns):
+		    publisher = i.text.strip()
 		    log.info("Extracted Publisher: %s" % publisher)
+		    for i in record.xpath(".//marc21:datafield[@tag='264']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
+			publisher_location = i.text.strip()
+			log.info("Extracted Publisher Location: %s" % publisher_location)
+			publisher = publisher + " : " + publisher_location
+			break
 		    mi.publisher = publisher
-		except:
-		    log.info("No Publisher found")
+		    break
 
-		try:
-		    year = record.xpath(".//dc:date",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
+		# Publishing Date
+		pubdate = None
+		for i in record.xpath(".//marc21:datafield[@tag='264']/marc21:subfield[@code='c' and string-length(text())>=4]",namespaces=ns):
+		    match = re.search("(\d{4})", i.text.strip())
+		    year = match.group()
 		    log.info("Extracted Year: %s" % year)
-		    mi.pubdate = datetime.datetime(int(year), 1, 1)
-		except:
-		    log.info("No Year found")
+		    mi.pubdate = datetime.datetime(int(year), 1, 2)
+		    break
 
-		try:
-		    languages = []
-		    for l in record.xpath(".//dc:language",namespaces={"dc": "http://purl.org/dc/elements/1.1/"}):
-			languages.append(l.text)
-			log.info("Extraced Language: %s" % l.text)
-		    mi.languages = languages
-		except:
-		    log.info("No Language found")
-
-		try:
-		    urn = record.xpath(".//dc:identifier[@*='tel:URN']",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
-		    log.info("Extraced URN: %s" % urn)
-		    mi.set_identifier('urn',urn)
-		except:
-		    log.info("No URN found")
-
-		try:
-		    idn = record.xpath(".//dc:identifier[@*='dnb:IDN']",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
-		    log.info("Extracted DNB IDN: %s" %idn)
+		# ID: IDN
+		idn = None
+		for i in record.xpath(".//marc21:datafield[@tag='016']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
+		    idn = i.text.strip()
+		    log.info("Extracted ID IDN: %s" % idn)
 		    mi.set_identifier('dnb-idn',idn)
-		except:
-		    log.info("No IDN found")
+		    break
 
-		try:
-		    isbn = record.xpath(".//dc:identifier[@*='tel:ISBN']",namespaces={"dc": "http://purl.org/dc/elements/1.1/"})[0].text
-		    isbnRegex = "(?:ISBN(?:-1[03])?:? )?(?=[-0-9 ]{17}|[-0-9X ]{13}|[0-9X]{10})(?:97[89][- ]?)?[0-9]{1,5}[- ]?(?:[0-9]+[- ]?){2}[0-9X]"
-		    match = re.search(isbnRegex, isbn)
+		# ID: URN
+		urn = None
+		for i in record.xpath(".//marc21:datafield[@tag='024']/marc21:subfield[@code='2' and text()='urn']/../marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
+		    urn = i.text.strip()
+		    log.info("Extracted ID URN: %s" % urn)
+		    mi.set_identifier('urn',urn)
+		    break
+
+		# ID: ISBN
+		isbn = None
+		for i in record.xpath(".//marc21:datafield[@tag='020']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
+		    isbn = i.text.strip()
+		    isbn_regex = "(?:ISBN(?:-1[03])?:? )?(?=[-0-9 ]{17}|[-0-9X ]{13}|[0-9X]{10})(?:97[89][- ]?)?[0-9]{1,5}[- ]?(?:[0-9]+[- ]?){2}[0-9X]"
+		    match = re.search(isbn_regex, isbn)
 		    isbn = match.group()
 		    isbn = isbn.replace('-','')
-		    log.info("Extracted ISBN: %s" %isbn)
-		    mi.set_identifier('dnb-idn',idn)	# required for info in metadata
-		    mi.isbn = isbn	# required for cover download
-		except:
-		    log.info("No ISBN found")
+		    log.info("Extracted ID ISBN: %s" % isbn)
+		    mi.isbn = isbn # also required for cover download
+		    break
 
-		try:
-		    subjects = []
-		    for s in record.xpath(".//dc:subject",namespaces={"dc": "http://purl.org/dc/elements/1.1/"}):
-			subjects.append(s.text)
-			log.info("Extracted Subject: %s" % s.text)
+		# ID: Sachgruppe (DDC)
+		ddc = []
+		for i in record.xpath(".//marc21:datafield[@tag='082']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
+		    ddc.append(i.text.strip())
+		if ddc is not None:
+		    log.info("Extracted ID DDC: %s" % ",".join(ddc))
+		    mi.set_identifier('ddc', ",".join(ddc))
+
+		# Series - 490 or 830?
+		series = None
+		series_index = None
+		for i in record.xpath(".//marc21:datafield[@tag='830']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..",namespaces=ns):
+		    # Series
+		    series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
+		    series = ''.join([c for c in series if ord(c)!=152 and ord(c)!=156])	# remove sorting word markers
+		    log.info("Extracted Series: %s" % series)
+		    mi.series = series
+		    # Series Index
+		    series_index = i.xpath(".//marc21:subfield[@code='v']",namespaces=ns)[0].text.strip()
+		    match = re.search("(\d+[,\.\d+]?)", series_index)
+		    series_index = match.group()
+		    series_index = series_index.replace(',','.')
+		    log.info("Extracted Series Index: %s" % series_index)
+		    mi.series_index = series_index
+		    break
+
+		# Subjects
+		subjects = []
+		for i in record.xpath(".//marc21:datafield[@tag='689']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
+		    subjects.append(i.text.strip())
+		for i in record.xpath(".//marc21:datafield[@tag='653']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
+		    if i.text.startswith("("):
+			continue
+		    subjects.extend(i.text.split(','))
+		if subjects is not None:
+		    log.info("Extracted Subjects: %s" % " ".join(subjects))
 		    mi.tags = subjects
-		except:
-		    log.info("No Subjects found")
+
+		# Language
+		languages = []
+		for i in record.xpath(".//marc21:datafield[@tag='041']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
+		    languages.append(i.text.strip())
+		if languages is not None:
+		    log.info("Extracted Languages: %s" % ",".join(languages))
+		    mi.languages = languages
+
 
 		# put current result's metdata into result queue
 		log.info("Final formatted result: %s" % mi)
 		result_queue.put(mi)
+
 
     def getSearchResults(self, log, query, timeout=30):
 	log.info('Querying: %s' % query)
@@ -267,8 +327,9 @@ class DNB_DE(Source):
 	root = None
 	try:
 	    data = self.browser.open_novisit(queryUrl, timeout=timeout).read()
-	    log.info('Got some data: %s' % data)
+	    #log.info('Got some data: %s' % data)
 	    root = etree.XML(data)
+
 	    numOfRecords = root.find('{http://www.loc.gov/zing/srw/}numberOfRecords').text
 	    log.info("Got records: %s " % numOfRecords)
 	    if int(numOfRecords) == 0:
@@ -276,7 +337,8 @@ class DNB_DE(Source):
 	except:
 	    log.info("Got no response.")
 	    return None
-	return root.find('{http://www.loc.gov/zing/srw/}records')
+
+	return root.xpath(".//marc21:record",namespaces={"marc21": "http://www.loc.gov/MARC21/slim"});
 
     def get_cached_cover_url(self, identifiers):
 	url = None
@@ -305,11 +367,11 @@ class DNB_DE(Source):
 		    cached_url = self.get_cached_cover_url(mi.identifiers)
 		    if cached_url is not None:
 			break
-		
+
 	if cached_url is None:
 	    log.info('No cover found')
 	    return None
-	
+
 	if abort.is_set():
 	    return
 	br = self.browser
