@@ -11,7 +11,7 @@ from calibre.ebooks.metadata.book.base import Metadata
 from calibre.library.comments import sanitize_comments_html
 
 import re, datetime
-from urllib import quote
+from urllib import quote, quote_plus
 from lxml import etree
 from lxml.etree import tostring
 
@@ -34,6 +34,7 @@ class DNB_DE(Source):
     prefer_results_with_isbn = True
 
     QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&accessToken=%s&maximumRecords=100&operation=searchRetrieve&recordSchema=MARC21-xml&query=%s'
+    SCRAPEURL = 'https://portal.dnb.de/opac.htm?method=showFullRecord&currentResultId=%s&currentPosition=%s'
     COVERURL = 'https://portal.dnb.de/opac/mvb/cover.htm?isbn=%s'
 
     def load_config(self):
@@ -43,6 +44,9 @@ class DNB_DE(Source):
 	self.cfg_append_edition_to_title = cfg.plugin_prefs[cfg.STORE_NAME].get(cfg.KEY_APPEND_EDITION_TO_TITLE,False)
 	self.cfg_fetch_subjects = cfg.plugin_prefs[cfg.STORE_NAME].get(cfg.KEY_FETCH_SUBJECTS,2)
 	self.cfg_dnb_token = cfg.plugin_prefs[cfg.STORE_NAME].get(cfg.KEY_SRUTOKEN,None)
+
+	if self.cfg_dnb_token == "enter-your-sru-token-here" or len(self.cfg_dnb_token)==0:
+	    self.cfg_dnb_token = None
 
     def config_widget(self):
 	self.cw = None
@@ -156,7 +160,10 @@ class DNB_DE(Source):
 	    query = query + ' NOT (mat=film OR mat=music OR mat=microfiches)'
 	    log.info(query)
 
-	    results = self.getSearchResults(log, query, timeout)
+	    if self.cfg_dnb_token is None:
+		results = self.getSearchResultsByScraping(log, query, timeout)
+	    else:
+		results = self.getSearchResults(log, query, timeout)
 
 	    if results is None:
 		continue
@@ -165,7 +172,6 @@ class DNB_DE(Source):
 
 	    ns = { 'marc21' : 'http://www.loc.gov/MARC21/slim' }
 	    for record in results:
-		#log.info(etree.tostring(record,pretty_print=True))
 		series = None
 		series_index = None
 		publisher = None
@@ -272,7 +278,7 @@ class DNB_DE(Source):
 			publisher_name = fields[0].xpath(".//marc21:subfield[@code='b' and string-length(text())>0]",namespaces=ns)[0].text.strip();
 		    else:
 			fields = record.xpath(".//marc21:datafield[@tag='264']/marc21:subfield[@code='a' and string-length(text())>0]/../..",namespaces=ns)
-			if len(field)>0:
+			if len(fields)>0:
 			    publisher_location = fields[0].xpath(".//marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns)[0].text.strip();
 
 		log.info("Extracted Publisher: %s" % publisher_name)
@@ -484,7 +490,7 @@ class DNB_DE(Source):
 	log.info('Querying: %s' % query)
 
 	queryUrl = self.QUERYURL % (self.cfg_dnb_token, quote(query.encode('utf-8')))
-	log.info('Querying: %s' % queryUrl)
+	log.info('Query URL: %s' % queryUrl)
 	
 	root = None
 	try:
@@ -501,6 +507,36 @@ class DNB_DE(Source):
 	    return None
 
 	return root.xpath(".//marc21:record",namespaces={"marc21": "http://www.loc.gov/MARC21/slim"});
+
+    def getSearchResultsByScraping(self, log, query, timeout=30):
+	log.info('Querying: %s' % query)
+
+	m21records = []
+	resultNum = 0
+	while True:
+	    if resultNum > 99:
+		break
+	    queryUrl = self.SCRAPEURL % (quote_plus(query+"&any"), str(resultNum))
+	    log.info('Query URL: %s' % queryUrl)
+	    try:
+		webpage = self.browser.open_novisit(queryUrl, timeout=timeout).read()
+		webroot = etree.HTML(webpage)
+		if len(webroot.xpath(".//p[text()='Datensatz kann nicht angezeigt werden.']"))>0:
+		    break
+
+		marc21link = webroot.xpath(u".//a[text()='MARC21-XML-Repräsentation dieses Datensatzes']/@href")[0]
+		log.info("Found link to MARC21-XML: %s " % marc21link)
+
+		m21data = self.browser.open_novisit(marc21link, timeout=timeout).read()
+		m21records.append(etree.XML(m21data));
+		resultNum += 1
+	    except:
+		log.info("Got no response.")
+		resultNum += 1
+
+	log.info("Got records: %s " % len(m21records))
+
+	return m21records
 
     def get_cached_cover_url(self, identifiers):
 	url = None

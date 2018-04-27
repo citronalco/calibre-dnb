@@ -48,7 +48,7 @@ class ConfigWidget(DefaultConfigWidget):
 	other_group_box.setLayout(other_group_box_layout)
 
 	# SRU Token
-	sru_token_label = QLabel('SRU Token:', self)
+	sru_token_label = QLabel('SRU Token (recommended):', self)
 	sru_token_label.setToolTip('To access the API of the DNB a personal SRU access token is required.\n'
 			    'The token is for free.\n\n'
 			    'To get a token, create an account at https://portal.dnb.de/myAccount/register.htm \n'

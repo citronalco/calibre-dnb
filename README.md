@@ -8,15 +8,19 @@ GND and/or non-GND subjects can be used as tags.
 
 ### Requirements:
 
-You need a personal SRU Access Token. The Token is free of charge.
+None.
 
-#### How to get a SRU Access Token:
+For better performance and stability it is highly recommended to use a personal SRU Access Token. The Token is free of charge.
+With this token this plugin will use DNB's SRU API, without token it will do web scraping.
+
+### How to get a SRU Access Token:
 
 1. Create a free account at https://portal.dnb.de/myAccount/register.htm
 1. Write an email to schnittstellen-service@dnb.de and ask them to enable SRU Access Token generation for your account.
 1. Log in into your DNB account and create an Access Token.
 1. Enter the Access Token into this plugin's settings page.
 
+The Token is free of charge.
 
 ### Limitations and caveats
 
