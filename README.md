@@ -10,8 +10,8 @@ GND and/or non-GND subjects can be used as tags.
 
 None.
 
-For better performance and stability it is highly recommended to use a personal SRU Access Token. The Token is free of charge.
-With this token this plugin will use DNB's SRU API, without token it will do web scraping.
+For better performance and stability it is recommended to use a personal SRU Access Token. The Token is free of charge, you can get it from the DNB.
+With this token this plugin will use DNB's SRU API, without token it will do web scraping. The downloaded metadata is the same in each case.
 
 ### How to get a SRU Access Token:
 
