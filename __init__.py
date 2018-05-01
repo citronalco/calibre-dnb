@@ -22,7 +22,7 @@ class DNB_DE(Source):
     description = _('Downloads metadata from the DNB (Deutsche National Bibliothek). Requires a personal SRU Access Token')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (2, 1, 2)
+    version = (2, 0, 3)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -73,8 +73,12 @@ class DNB_DE(Source):
 
 
 	queries=[]
+	# DNB does not do an exact search when searching for a idn or isbn, so we have to filter the results
+	exact_search = {}
+
 	if idn is not None:
 	    queries.append('num='+idn)
+	    exact_search['idn'] = idn
 
 	else:
 	    authors_v=[]
@@ -90,6 +94,8 @@ class DNB_DE(Source):
 		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=False,strip_subtitle=False)))
 		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=False,strip_subtitle=True)))
 
+	    if isbn is not None:
+		exact_search['isbn'] = isbn
 
 	    # title and author
 	    if authors is not None and title is not None:
@@ -289,10 +295,11 @@ class DNB_DE(Source):
 		# Publishing Date
 		for i in record.xpath(".//marc21:datafield[@tag='264']/marc21:subfield[@code='c' and string-length(text())>=4]",namespaces=ns):
 		    match = re.search("(\d{4})", i.text.strip())
-		    year = match.group(1)
-		    pubdate = datetime.datetime(int(year), 1, 2)
-		    break
-		log.info("Extracted Publication Year: %s" % year)
+		    if match is not None:
+			year = match.group(1)
+			pubdate = datetime.datetime(int(year), 1, 2)
+			break
+		log.info("Extracted Publication Year: %s" % pubdate)
 
 
 		# ID: IDN
@@ -300,6 +307,10 @@ class DNB_DE(Source):
 		    idn = i.text.strip()
 		    break
 		log.info("Extracted ID IDN: %s" % idn)
+		if "idn" in exact_search:
+		    if idn != exact_search["idn"]:
+			log.info("Extracted IDN does not match book's IDN, skipping record")
+			continue
 
 
 		# ID: URN
@@ -317,6 +328,10 @@ class DNB_DE(Source):
 		    isbn = isbn.replace('-','')
 		    break
 		log.info("Extracted ID ISBN: %s" % isbn)
+		if "isbn" in exact_search:
+		    if isbn != exact_search["isbn"]:
+			log.info("Extracted ISBN does not match book's ISBN, skipping record")
+			continue
 
 
 		# ID: Sachgruppe (DDC)
@@ -328,21 +343,24 @@ class DNB_DE(Source):
 		# Series and Series_Index
 		if series is None and series_index is None:
 		    for i in record.xpath(".//marc21:datafield[@tag='830']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..",namespaces=ns):
-			# Series
-			series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
-			log.info("Extracted Series: %s" % series)
 			# Series Index
 			series_index = i.xpath(".//marc21:subfield[@code='v']",namespaces=ns)[0].text.strip()
 			match = re.search("(\d+[,\.\d+]?)", series_index)
-			series_index = match.group(1)
-			series_index = series_index.replace(',','.')
-			log.info("Extracted Series Index: %s" % series_index)
-			break
+			if match is not None:
+			    series_index = match.group(1)
+			    series_index = series_index.replace(',','.')
+			    log.info("Extracted Series Index: %s" % series_index)
+			    # Series
+			    series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
+			    log.info("Extracted Series: %s" % series)
+			    break
 
 
 		# Try to extract Series, Series Index and Title from the fetched title.
-		# Caution: Also modifies the title!
-		if series is None and series_index is None and title is not None and self.cfg_guess_series is True:
+		# Caution: This overwrites DNB's series/series_index and modifies the title!
+		if self.cfg_guess_series is True:
+		    guessed_series = None
+		    guessed_series_index = None
 		    parts = re.split("[:]",self.removeSortingCharacters(title))
 		    if len(parts)==2:
 			if bool(re.search("\d",parts[0])) != bool(re.search("\d",parts[1])):
@@ -361,33 +379,35 @@ class DNB_DE(Source):
 			    # from Titles like: "Name of the series - Episode 2"
 			    match = re.match("^\s*(\S.*?)??[\/\.,\s\-–:]*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)?[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",indexpart)
 			    if match:
-				series_index = match.group(2)
-				series = match.group(1)
-				if series is None:
-				    series = textpart
-				    title = textpart + " : Band " + series_index
+				guessed_series_index = match.group(2)
+				guessed_series = match.group(1)
+				if guessed_series is None:
+				    guessed_series = textpart
+				    title = textpart + " : Band " + guessed_series_index
 				else:
 				    title = textpart
 			    else:
 				# from Titles like: "Episode 2 Name of the series"
 				match = re.match("^\s*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*(\S.*?)??[\/\.,\-–\s]*$",indexpart)
 				if match:
-				    series_index = match.group(1)
-				    series = match.group(2)
-				    if series is None:
-					series = textpart
-					title = textpart + " : Band " + series_index
+				    guessed_series_index = match.group(1)
+				    guessed_series = match.group(2)
+				    if guessed_series is None:
+					guessed_series = textpart
+					title = textpart + " : Band " + guessed_series_index
 				    else:
 					title = textpart
 		    elif len(parts)==1:
 			# from Titles like: "Name of the series - Episode 2"
 			match = re.match("^\s*(\S.+?)??[\/\.,\s\-–:]*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)?[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",parts[0])
 			if match:
-			    series_index = match.group(2)
-			    series = match.group(1)
-			    title = series + " : Band " + series_index
+			    guessed_series_index = match.group(2)
+			    guessed_series = match.group(1)
+			    title = series + " : Band " + guessed_series_index
 
-		    if series is not None and series_index is not None:
+		    if guessed_series is not None and guessed_series_index is not None:
+			series = guessed_series
+			series_index = guessed_series_index
 			log.info("Guessed Series: %s" % series)
 			log.info("Guessed Series Index: %s" % series_index)
 
