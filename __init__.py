@@ -22,7 +22,7 @@ class DNB_DE(Source):
     description = _('Downloads metadata from the DNB (Deutsche National Bibliothek). Requires a personal SRU Access Token')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (2, 0, 3)
+    version = (2, 0, 4)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -289,7 +289,6 @@ class DNB_DE(Source):
 
 		log.info("Extracted Publisher: %s" % publisher_name)
 		log.info("Extracted Publisher Location: %s" % publisher_location)
-		publisher = " : ".join(filter(None,[publisher_location, publisher_name]))
 
 
 		# Publishing Date
@@ -461,6 +460,7 @@ class DNB_DE(Source):
 		mi.author_sort = self.removeSortingCharacters(author_sort)
 		mi.languages = languages
 		mi.pubdate = pubdate
+		mi.publisher = " : ".join(filter(None,[publisher_location, self.removeSortingCharacters(publisher_name)]))
 		mi.series = self.removeSortingCharacters(series)
 		mi.series_index = series_index
 		mi.comments = comments
