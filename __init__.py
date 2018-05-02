@@ -22,7 +22,7 @@ class DNB_DE(Source):
     description = _('Downloads metadata from the DNB (Deutsche National Bibliothek). Requires a personal SRU Access Token')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (2, 0, 4)
+    version = (2, 0, 5)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -203,14 +203,16 @@ class DNB_DE(Source):
 		    match = re.search("(\d+[,\.\d+]?)", series_index)
 		    if match:
 			series_index = match.group(1)
-			series_index = series_index.replace(',','.')
-			series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
-			title_parts.append(i.xpath(".//marc21:subfield[@code='p']",namespaces=ns)[0].text.strip())
-			log.info("Extracted Series: %s" % series)
-			log.info("Extracted Series Index: %s" % series_index)
-			break
+		    else:
+			series_index = "0"	# looks like sometimes DNB does not know the series index and uses something like "[...]"
+		    series_index = series_index.replace(',','.')
+		    series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
+		    title_parts.append(i.xpath(".//marc21:subfield[@code='p']",namespaces=ns)[0].text.strip())
+		    log.info("Extracted Series: %s" % series)
+		    log.info("Extracted Series Index: %s" % series_index)
+		    break
 		# otherwise: title = a
-		if title is None:
+		if len(title_parts)==0:
 		    for i in record.xpath(".//marc21:datafield[@tag='245']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
 			title_parts.append(i.text.strip())
 			break
@@ -347,12 +349,14 @@ class DNB_DE(Source):
 			match = re.search("(\d+[,\.\d+]?)", series_index)
 			if match is not None:
 			    series_index = match.group(1)
-			    series_index = series_index.replace(',','.')
-			    log.info("Extracted Series Index: %s" % series_index)
-			    # Series
-			    series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
-			    log.info("Extracted Series: %s" % series)
-			    break
+			else:
+			    series_index = "0"
+			series_index = series_index.replace(',','.')
+			log.info("Extracted Series Index: %s" % series_index)
+			# Series
+			series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
+			log.info("Extracted Series: %s" % series)
+			break
 
 
 		# Try to extract Series, Series Index and Title from the fetched title.
@@ -375,8 +379,8 @@ class DNB_DE(Source):
 			    if match:
 				textpart = match.group(1)
 
-			    # from Titles like: "Name of the series - Episode 2"
-			    match = re.match("^\s*(\S.*?)??[\/\.,\s\-–:]*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)?[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",indexpart)
+			    # from Titleparts like: "Name of the series - Episode 2"	OK
+			    match = re.match("^\s*(\S.*?)[\(\/\.,\s\-–:]*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",indexpart)
 			    if match:
 				guessed_series_index = match.group(2)
 				guessed_series = match.group(1)
@@ -386,8 +390,8 @@ class DNB_DE(Source):
 				else:
 				    title = textpart
 			    else:
-				# from Titles like: "Episode 2 Name of the series"
-				match = re.match("^\s*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*(\S.*?)??[\/\.,\-–\s]*$",indexpart)
+				# from Titleparts like: "Episode 2 Name of the series"
+				match = re.match("^\s*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*(\S.*?)[\/\.,\-–\s]*$",indexpart)
 				if match:
 				    guessed_series_index = match.group(1)
 				    guessed_series = match.group(2)
@@ -397,12 +401,20 @@ class DNB_DE(Source):
 				    else:
 					title = textpart
 		    elif len(parts)==1:
-			# from Titles like: "Name of the series - Episode 2"
-			match = re.match("^\s*(\S.+?)??[\/\.,\s\-–:]*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)?[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",parts[0])
+			# from Titles like: "Name of the series - Title (Episode 2)"
+			match = re.match("^\s*(\S.+?) \- (\S.+?) [\(\/\.,\s\-–:](?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",parts[0])
 			if match:
-			    guessed_series_index = match.group(2)
+			    guessed_series_index = match.group(3)
 			    guessed_series = match.group(1)
-			    title = series + " : Band " + guessed_series_index
+			    title = match.group(2)
+
+			else:
+			    # from Titles like: "Name of the series - Episode 2"
+			    match = re.match("^\s*(\S.+?)[\(\/\.,\s\-–:]*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",parts[0])
+			    if match:
+				guessed_series_index = match.group(2)
+				guessed_series = match.group(1)
+				title = guessed_series + " : Band " + guessed_series_index
 
 		    if guessed_series is not None and guessed_series_index is not None:
 			series = guessed_series
