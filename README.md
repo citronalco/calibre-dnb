@@ -13,6 +13,15 @@ None.
 For better performance and stability it is recommended to use a personal SRU Access Token. The Token is free of charge, you can get it from the DNB.
 With this token this plugin will use DNB's SRU API, without token it will do web scraping. The downloaded metadata is the same in each case.
 
+### Installation:
+
+1. Download the latest release (https://github.com/citronalco/calibre-dnb/releases/download/v2.0.5/dnb-metadata-plugin-2.0.5.zip)
+1. Start Calibre
+1. In "Preferences", section "Advanced" click on "Plugins"
+1. "Load plugin from file"
+1. Choose the downloaded dnb-metadata-plugin-2.0.5.zip
+1. Restart Calibre
+
 ### How to get a SRU Access Token:
 
 1. Create a free account at https://portal.dnb.de/myAccount/register.htm
