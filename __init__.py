@@ -232,12 +232,13 @@ class DNB_DE(Source):
 
 
 		# Title_Sort
-		title_sort_parts = list(title_parts)
-		title_sort_regex = re.match('^(.*?)('+chr(152)+'.*'+chr(156)+')?(.*?)$',title_parts[0])
-		sortword = title_sort_regex.group(2)
-		if sortword:
-		    title_sort_parts[0] = ''.join(filter(None,[title_sort_regex.group(1).strip(),title_sort_regex.group(3).strip(),", "+sortword]))
-		title_sort = " : ".join(title_sort_parts)
+		if len(title_parts)>0:
+		    title_sort_parts = list(title_parts)
+		    title_sort_regex = re.match('^(.*?)('+chr(152)+'.*'+chr(156)+')?(.*?)$',title_parts[0])
+		    sortword = title_sort_regex.group(2)
+		    if sortword:
+			title_sort_parts[0] = ''.join(filter(None,[title_sort_regex.group(1).strip(),title_sort_regex.group(3).strip(),", "+sortword]))
+		    title_sort = " : ".join(title_sort_parts)
 		log.info("Extracted Title_Sort: %s" % title_sort)
 
 
