@@ -19,7 +19,7 @@ With this token this plugin will use DNB's SRU API, without token it will do web
 1. Start Calibre
 1. In "Preferences", section "Advanced" click on "Plugins"
 1. "Load plugin from file"
-1. Choose the downloaded dnb-metadata-plugin-2.0.5.zip
+1. Choose the downloaded dnb-metadata-plugin zip file
 1. Restart Calibre
 
 ### How to get a SRU Access Token:
