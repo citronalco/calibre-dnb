@@ -549,18 +549,17 @@ class DNB_DE(Source):
 	while True:
 	    if resultNum > 99:
 		break
-	    queryUrl = self.SCRAPEURL % (quote_plus(query+"&any"), str(resultNum))
+	    queryUrl = self.SCRAPEURL % (quote_plus(query.encode('utf-8')+"&any"), str(resultNum))
 	    log.info('Query URL: %s' % queryUrl)
 	    try:
 		webpage = self.browser.open_novisit(queryUrl, timeout=timeout).read()
 		webroot = etree.HTML(webpage)
-		if len(webroot.xpath(".//p[text()='Datensatz kann nicht angezeigt werden.']"))>0:
-		    break
 
-		marc21link = webroot.xpath(u".//a[text()='MARC21-XML-Repräsentation dieses Datensatzes']/@href")[0]
-		log.info("Found link to MARC21-XML: %s " % marc21link)
+		marc21links = webroot.xpath(u".//a[text()='MARC21-XML-Repräsentation dieses Datensatzes']/@href")
+		if len(marc21links) == 0:
+		    break;
 
-		m21data = self.browser.open_novisit(marc21link, timeout=timeout).read()
+		m21data = self.browser.open_novisit(marc21links[0], timeout=timeout).read()
 		m21records.append(etree.XML(m21data));
 		resultNum += 1
 	    except:
