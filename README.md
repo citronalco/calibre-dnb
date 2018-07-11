@@ -15,7 +15,7 @@ With this token this plugin will use DNB's SRU API, without token it will do web
 
 ### Installation:
 
-1. Download the latest release (https://github.com/citronalco/calibre-dnb/releases/download/v2.0.5/dnb-metadata-plugin-2.0.5.zip)
+1. Download the latest plugin version from the "Releases" page (https://github.com/citronalco/calibre-dnb/releases/)
 1. Start Calibre
 1. In "Preferences", section "Advanced" click on "Plugins"
 1. "Load plugin from file"
