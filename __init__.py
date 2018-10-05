@@ -22,7 +22,7 @@ class DNB_DE(Source):
     description = _('Downloads metadata from the DNB (Deutsche National Bibliothek). Requires a personal SRU Access Token')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (2, 0, 6)
+    version = (2, 0, 7)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -529,26 +529,34 @@ class DNB_DE(Source):
 	try:
 	    data = self.browser.open_novisit(queryUrl, timeout=timeout).read()
 	    #log.info('Got some data: %s' % data)
-	    root = etree.XML(data)
 
+	    root = etree.XML(data)
+	    #log.info(etree.tostring(root,pretty_print=True))
 	    numOfRecords = root.find('{http://www.loc.gov/zing/srw/}numberOfRecords').text
-	    log.info("Got records: %s " % numOfRecords)
+	    log.info('Got records: %s' % numOfRecords)
+
 	    if int(numOfRecords) == 0:
 		return None
-	except:
-	    log.info("Got no response.")
-	    return None
 
-	return root.xpath(".//marc21:record",namespaces={"marc21": "http://www.loc.gov/MARC21/slim"});
+	    return root.xpath(".//marc21:record",namespaces={"marc21": "http://www.loc.gov/MARC21/slim"})
+	except:
+            try:
+		diag = ": ".join([
+		    root.find('diagnostics/diag:diagnostic/diag:details',namespaces={None: 'http://www.loc.gov/zing/srw/', 'diag': 'http://www.loc.gov/zing/srw/diagnostic/'}).text,
+		    root.find('diagnostics/diag:diagnostic/diag:message',namespaces={None: 'http://www.loc.gov/zing/srw/', 'diag': 'http://www.loc.gov/zing/srw/diagnostic/'}).text
+		])
+		log.error('ERROR: %s' % diag)
+		return None
+	    except:
+		log.error('ERROR: Got no valid response.')
+		return None
 
     def getSearchResultsByScraping(self, log, query, timeout=30):
 	log.info('Querying: %s' % query)
 
 	m21records = []
 	resultNum = 0
-	while True:
-	    if resultNum > 99:
-		break
+	while resultNum < 100:
 	    queryUrl = self.SCRAPEURL % (quote_plus(query.encode('utf-8')+"&any"), str(resultNum))
 	    log.info('Query URL: %s' % queryUrl)
 	    try:
