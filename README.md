@@ -25,7 +25,8 @@ With this token this plugin will use DNB's SRU API, without token it will do web
 ### How to get a SRU Access Token:
 
 1. Create a free account at https://portal.dnb.de/myAccount/register.htm
-1. Write an email to schnittstellen-service@dnb.de and ask them to enable SRU Access Token generation for your account.
+1. Write an email to schnittstellen-service@dnb.de and ask them to enable SRU Access Token generation for your login name and that you want to access the title data catalogue ("Titeldaten-Katalog") in MARC21-xml format.
+1. Wait for their confirmation email.
 1. Log in into your DNB account and create an Access Token.
 1. Enter the Access Token into this plugin's settings page.
 
