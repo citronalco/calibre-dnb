@@ -22,7 +22,7 @@ With this token this plugin will use DNB's SRU API, without token it will do web
 1. Choose the downloaded dnb-metadata-plugin zip file
 1. Restart Calibre
 
-### How to get a SRU Access Token:
+### How to get a SRU Access Token (optional):
 
 1. Create a free account at https://portal.dnb.de/myAccount/register.htm
 1. Write an email to schnittstellen-service@dnb.de and ask them to enable SRU Access Token generation for your login name and that you want to access the title data catalogue ("Titeldaten-Katalog") in MARC21-xml format.
