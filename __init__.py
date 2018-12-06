@@ -163,7 +163,7 @@ class DNB_DE(Source):
 	results = None
 
 	for query in uniqueQueries:
-	    query = query + ' NOT (mat=film OR mat=music OR mat=microfiches)'
+	    query = query + ' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)'
 	    log.info(query)
 
 	    if self.cfg_dnb_token is None:
