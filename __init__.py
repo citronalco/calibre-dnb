@@ -267,6 +267,7 @@ class DNB_DE(Source):
 			log.info('Downloading Comments from: %s' % i.text)
 			try:
 			    comments = br.open_novisit(i.text, timeout=30).read()
+			    comments = re.sub('(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)?(\s|<br>|<p>|\n)*','',comments,flags=re.IGNORECASE)
 			    comments = sanitize_comments_html(comments)
 			    log.info('Comments: %s' % comments)
 			    break
