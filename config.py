@@ -62,9 +62,8 @@ class ConfigWidget(DefaultConfigWidget):
 
 	# Guess Series
 	guess_series_label = QLabel('Guess Series and Series Index from Title:', self)
-	guess_series_label.setToolTip('DNB only rarely provides correct data about a book\'s series.\n'
-			    'This plugin can try to extract series and series_index from the book title.\n'
-			    'Be careful, this overrides DNB\'s series metadata does not work perfectly!')
+	guess_series_label.setToolTip('DNB only rarely provides data about a book\'s series.\n'
+			    'This plugin can try to extract series and series_index from the book title.\n')
 	other_group_box_layout.addWidget(guess_series_label, 1, 0, 1, 1)
 
 	self.guess_series_checkbox = QtGui.QCheckBox(self)
