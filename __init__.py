@@ -22,7 +22,7 @@ class DNB_DE(Source):
     description = _('Downloads metadata from the DNB (Deutsche National Bibliothek). Requires a personal SRU Access Token')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (2, 1, 0)
+    version = (2, 1, 1)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -281,9 +281,14 @@ class DNB_DE(Source):
 
 		title = " : ".join(title_parts)
 
+		# Log
+		if series_index is not None:
+		    log.info("Extracted Series_Index from Field 245: %s" % series_index)
 		if series is not None:
+		    log.info("Extracted Series from Field 245: %s" % series)
 		    series = self.cleanUpSeries(log, series, publisher_name)
 		if title is not None:
+		    log.info("Extracted Title: %s" % title)
 		    title = self.cleanUpTitle(log, title)
 
 		# Title_Sort
@@ -296,13 +301,8 @@ class DNB_DE(Source):
 		    title_sort = " : ".join(title_sort_parts)
 
 		# Log
-		if title is not None:
-		    log.info("Extracted Title: %s" % title)
 		if title_sort is not None:
 		    log.info("Extracted Title_Sort: %s" % title_sort)
-		if series is not None and series_index is not None:
-		    log.info("Extracted Series from Field 245: %s" % series)
-		    log.info("Extracted Series_Index from Field 245: %s" % series_index)
 
 
 		##### Field 100 and Field 700 #####
@@ -344,6 +344,39 @@ class DNB_DE(Source):
 		# Log
 		if comments is not None:
 		    log.info('Comments: %s' % comments)
+
+		# If no comments are found for this edition, look at other editions of this book (Fields 776)
+		# TODO: Make this configurable (default: yes)
+		if comments is None:
+		    # get all other issues
+		    for i in record.xpath(".//marc21:datafield[@tag='776']/marc21:subfield[@code='w' and string-length(text())>0]",namespaces=ns):
+			other_idn = re.sub("^\(.*\)","",i.text.strip());
+			subquery = 'num='+other_idn+' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)'
+			log.info(subquery)
+
+			if self.cfg_dnb_token is None:
+			    subresults = self.getSearchResultsByScraping(log, subquery, timeout)
+			else:
+			    subresults = self.getSearchResults(log, subquery, timeout)
+
+			if subresults is None:
+			    continue
+
+			for subrecord in subresults:
+			    for i in subrecord.xpath(".//marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>0]",namespaces=ns):
+				if i.text.startswith("http://deposit.dnb.de/"):
+				    br = self.browser
+				    log.info('Downloading Comments from: %s' % i.text)
+				    try:
+					comments = br.open_novisit(i.text, timeout=30).read()
+					comments = re.sub('(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)?(\s|<br>|<p>|\n)*','',comments,flags=re.IGNORECASE)
+					comments = sanitize_comments_html(comments)
+					break
+				    except:
+					log.info("Could not download Comments from %s" % i)
+			    if comments is not None:
+				log.info('Comments from other issue: %s' % comments)
+				break
 
 
 		##### Field 16 #####
@@ -398,6 +431,7 @@ class DNB_DE(Source):
 
 
 		##### Field 490 #####
+		# In theroy this field is not used for "real" book series, use field 830 instead. But it is used.
 		# Series and Series_Index
 		if series is None:
 		    for i in record.xpath(".//marc21:datafield[@tag='490']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..",namespaces=ns):
@@ -411,15 +445,58 @@ class DNB_DE(Source):
 			series_index = series_index.replace(',','.')
 			# Series
 			series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
-			break
 
-		    if series is not None:
-			series = self.cleanUpSeries(log, series, publisher_name)
+			# Log
+			if series_index is not None:
+			    log.info("Extracted Series Index from Field 490: %s" % series_index)
+			if series is not None:
+			    log.info("Extracted Series from Field 490: %s" % series)
+			    series = self.cleanUpSeries(log, series, publisher_name)
+			if series is not None:
+			    break
 
-		    # Log
-		    if series is not None and series_index is not None:
-			log.info("Extracted Series from Field 490: %s" % series)
-			log.info("Extracted Series Index from Field 490: %s" % series_index)
+
+		##### Field 246 #####
+		# Series and Series_Index
+		if series is None:
+		    for i in record.xpath(".//marc21:datafield[@tag='246']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
+			match = re.search("^(.+?) ; (\d+[,\.\d+]?)$", i.text.strip())
+			if match is not None:
+			    series = match.group(1)
+			    series_index = match.group(2)
+
+			    # Log
+			    if series_index is not None:
+				log.info("Extracted Series Index from Field 246: %s" % series_index)
+			    if series is not None:
+				log.info("Extracted Series from Field 246: %s" % series)
+				series = self.cleanUpSeries(log, series, publisher_name)
+			    if series is not None:
+				break
+
+		##### Field 800 #####
+		# Series and Series_Index
+		if series is None:
+		    for i in record.xpath(".//marc21:datafield[@tag='800']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='t' and string-length(text())>0]/..",namespaces=ns):
+			# Series Index
+			series_index = i.xpath(".//marc21:subfield[@code='v']",namespaces=ns)[0].text.strip()
+			match = re.search("(\d+[,\.\d+]?)", series_index)
+			if match is not None:
+			    series_index = match.group(1)
+			else:
+			    series_index = "0"
+			series_index = series_index.replace(',','.')
+			# Series
+			series = i.xpath(".//marc21:subfield[@code='t']",namespaces=ns)[0].text.strip()
+
+			# Log
+			if series_index is not None:
+			    log.info("Extracted Series Index from Field 800: %s" % series_index)
+			if series is not None:
+			    log.info("Extracted Series from Field 800: %s" % series)
+			    series = self.cleanUpSeries(log, series, publisher_name)
+			if series is not None:
+			    break
 
 
 		##### Field 830 #####
@@ -436,15 +513,15 @@ class DNB_DE(Source):
 			series_index = series_index.replace(',','.')
 			# Series
 			series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
-			break
 
-		    if series is not None:
-			series = self.cleanUpSeries(log, series, publisher_name)
-
-		    # Log
-		    if series is not None and series_index is not None:
-			log.info("Extracted Series from Field 830: %s" % series)
-			log.info("Extracted Series Index from Field 830: %s" % series_index)
+			# Log
+			if series_index is not None:
+			    log.info("Extracted Series Index from Field 830: %s" % series_index)
+			if series is not None:
+			    log.info("Extracted Series from Field 830: %s" % series)
+			    series = self.cleanUpSeries(log, series, publisher_name)
+			if series is not None:
+			    break
 
 
 		##### Field 689 #####
@@ -502,9 +579,11 @@ class DNB_DE(Source):
 
 
 		##### If configured: Try to separate Series, Series Index and Title from the fetched title #####
+		#if self.cfg_guess_series is True:
 		if series is None and self.cfg_guess_series is True:
 		    guessed_series = None
 		    guessed_series_index = None
+		    guessed_title = None
 		    parts = re.split("[:]",self.removeSortingCharacters(title))
 
 		    if len(parts)==2:
@@ -527,11 +606,10 @@ class DNB_DE(Source):
 				guessed_series = match.group(1)
 				if guessed_series is None:
 				    guessed_series = textpart
-				    title = textpart + " : Band " + guessed_series_index
+				    guessed_title = textpart + " : Band " + guessed_series_index
 				else:
-				    title = textpart
+				    guessed_title = textpart
 			    else:
-
 				# from Titleparts like: "Episode 2 Name of the series"
 				match = re.match("^\s*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*(\S.*?)[\/\.,\-–\s]*$",indexpart)
 				if match:
@@ -539,9 +617,9 @@ class DNB_DE(Source):
 				    guessed_series = match.group(2)
 				    if guessed_series is None:
 					guessed_series = textpart
-					title = textpart + " : Band " + guessed_series_index
+					guessed_title = textpart + " : Band " + guessed_series_index
 				    else:
-					title = textpart
+					guessed_title = textpart
 
 		    elif len(parts)==1:
 			# from Titles like: "Name of the series - Title (Episode 2)"
@@ -549,28 +627,29 @@ class DNB_DE(Source):
 			if match:
 			    guessed_series_index = match.group(3)
 			    guessed_series = match.group(1)
-			    title = match.group(2)
+			    guessed_title = match.group(2)
 			else:
-
 			    # from Titles like: "Name of the series - Episode 2"
 			    match = re.match("^\s*(\S.+?)[\(\/\.,\s\-–:]*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",parts[0])
 			    if match:
 				guessed_series_index = match.group(2)
 				guessed_series = match.group(1)
-				title = guessed_series + " : Band " + guessed_series_index
-
-		    if guessed_series is not None:
-			guessed_series = self.cleanUpSeries(log, guessed_series, publisher_name)
-		    if title is not None:
-			title = self.cleanUpTitle(log, title)
+				guessed_title = guessed_series + " : Band " + guessed_series_index
 
 		    # Log
-		    if guessed_series is not None and guessed_series_index is not None and title is not None:
+		    if guessed_series is not None:
+			log.info("Guessed Series: %s" % series)
+			#guessed_series = self.cleanUpSeries(log, guessed_series, publisher_name)
+		    if guessed_series_index is not None:
+			log.info("Guessed Series Index: %s" % series_index)
+		    if guessed_title is not None:
+			log.info("Guessed Title: %s" % guessed_title)
+			guessed_title = self.cleanUpTitle(log, guessed_title)
+
+		    if guessed_series is not None and guessed_series_index is not None and guessed_title is not None:
+			title = guessed_title
 			series = guessed_series
 			series_index = guessed_series_index
-			log.info("Guessed Title: %s" % title)
-			log.info("Guessed Series: %s" % series)
-			log.info("Guessed Series Index: %s" % series_index)
 
 
 		##### Filter exact searches #####
@@ -663,8 +742,9 @@ class DNB_DE(Source):
 			log.info("Series starts with publisher name, ignoring")
 			return None
 	    # do not accept some other unwanted series names
+	    # TODO: Has issues with Umlaus in regex (or series string?)
 	    for i in [
-		'^dtv$','^Oettinger-Taschenbuch$','^Haymon-Taschenbuch$','^Mira Taschenbuch$','^Suhrkamp-Taschenbuch$','^Bastei-Lübbe','^Hey$','^btb$', \
+		'^dtv$','^Oettinger-Taschenbuch$','^Haymon-Taschenbuch$','^Mira Taschenbuch$','^Suhrkamp-Taschenbuch$','^Bastei-L','^Hey$','^btb$', '^bt-Kinder', \
 		'^blanvalet$','^KiWi$','^Piper$','^C.H. Beck','^Rororo','^Goldmann$','^Moewig$','^Fischer Klassik$','^hey! shorties$','^Ullstein', \
 		'^Unionsverlag','^Ariadne-Krimi','^C.-Bertelsmann']:
 		if re.search(i,series,flags=re.IGNORECASE):
