@@ -22,7 +22,7 @@ class DNB_DE(Source):
     description = _('Downloads metadata from the DNB (Deutsche National Bibliothek). Requires a personal SRU Access Token')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (2, 1, 1)
+    version = (2, 1, 2)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -56,7 +56,7 @@ class DNB_DE(Source):
     def is_customizable(self):
 	return True
 
-    def identify(self, log, result_queue, abort, title=None, authors=None, identifiers={}, timeout=30):
+    def identify(self, log, result_queue, abort, title=None, authors=[], identifiers={}, timeout=30):
 	self.load_config()
 
 	# get identifying tags from book
@@ -64,8 +64,9 @@ class DNB_DE(Source):
 	isbn = check_isbn(identifiers.get('isbn', None))
 
 	# ignore unknown authors
-	if authors is "V. A." or authors is "V.A." or authors is "Unknown" or authors is "Unbekannt":
-	    authors = None
+	ignored_authors = [ "V. A.", "V.A.", "Unknown", "Unbekannt" ]
+	for i in ignored_authors:
+	    authors = [ x for x in authors if x != i ]
 
 	if (isbn is None) and (idn is None) and (title is None) and (authors is None):
 	    log.info("This plugin requires at least either ISBN, IDN, Title or Author(s).")
@@ -82,76 +83,94 @@ class DNB_DE(Source):
 	    queries.append('num='+idn)
 
 	else:
-	    authors_v=[]
-	    title_v=[]
+	    authors_v = []
+	    title_v = []
 
-	    if authors is not None:
-		authors_v.append(' '.join(authors))
-		authors_v.append(' '.join(self.get_author_tokens(authors,only_first_author=False)))
-		authors_v.append(' '.join(self.get_author_tokens(authors,only_first_author=True)))
+	    # create some variants of given authors
+	    if authors != []:
+		authors_v.append(' '.join(self.get_author_tokens(authors,only_first_author=False)))	# concat all author names ("Peter Meier Luise Stark")
+		authors_v.append(' '.join(self.get_author_tokens(authors,only_first_author=True)))	# use only first author
+		for a in authors:
+		    authors_v.append(a)	# use all authors, one by one
 
+		# remove duplicates
+		unique_authors_v = []
+		for i in authors_v:
+		    if i not in unique_authors_v:
+			unique_authors_v.append(i)
+
+
+	    # create some variants of given title
 	    if title is not None:
-		title_v.append(title)
-		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=False,strip_subtitle=False)))
-		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=False,strip_subtitle=True)))
+		title_v.append(title)	# simply use given title
+		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=False,strip_subtitle=False)))	# remove some punctation characters
+		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=False,strip_subtitle=True)))	# remove subtitle (everything after " : ")
+		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=True,strip_subtitle=False)))	# remove some punctation characters and joiners ("and", "&", ...)
+		title_v.append(' '.join(self.get_title_tokens(title,strip_joiners=True,strip_subtitle=True)))	# remove subtitle (everything after " : ") and joiners ("and", "&", ...)
+		# TODO: remove subtitle after " - "
 
-	    if isbn is not None:
-		exact_search['isbn'] = isbn
+		# remove duplicates
+		unique_title_v = []
+		for i in title_v:
+		    if i not in unique_title_v:
+			unique_title_v.append(i)
+
 
 	    # title and author
-	    if authors is not None and title is not None:
+	    if authors_v != [] and title_v != []:
 		for a in authors_v:
 		    for t in title_v:
 			if isbn is not None:
-			    queries.append('tit="'+t+'" AND per="'+a+'" AND num="'+isbn+'"')
+			    queries.append('tit="' + t + '" AND per="' + a + '" AND num="' + isbn + '"')
 			else:
-			    queries.append('tit="'+t+'" AND per="'+a+'"')
+			    queries.append('tit="' + t + '" AND per="' + a + '"')
 
-		# try with author and title swapped
+		# try with first author as title and title (without subtitle) as author
 		if isbn is not None:
-		    queries.append('per="'+title+'" AND tit="'+authors[0]+'" AND num="'+isbn+'"')
+		    queries.append('per="' + ' '.join(self.get_title_tokens(title,strip_joiners=True,strip_subtitle=True)) + '" AND tit="' + ' '.join(self.get_author_tokens(authors,only_first_author=True)) + '" AND num="'+isbn+'"')
 		else:
-		    queries.append('per="'+title+'" AND tit="'+authors[0]+'"')
+		    queries.append('per="' + ' '.join(self.get_title_tokens(title,strip_joiners=True,strip_subtitle=True)) + '" AND tit="' + ' '.join(self.get_author_tokens(authors,only_first_author=True)) + '"')
 
-
-	    # title but no author
-	    elif authors is not None and title is None:
-		for i in authors_v:
-		    if isbn is not None:
-			queries.append('per="'+i+'" AND num="'+isbn+'"')
-		    else:
-			queries.append('per="'+i+'"')
-
-		# try with author and title swapped
+		# try with author and title (without subtitle) in any index
 		if isbn is not None:
-		    queries.append('tit="'+authors[0]+'" AND num="'+isbn+'"')
+		    queries.append('"' + ' '.join(self.get_title_tokens(title,strip_joiners=True,strip_subtitle=True)) + '" AND "' + ' '.join(self.get_author_tokens(authors,only_first_author=True)) + '" AND num="'+isbn+'"')
 		else:
-		    queries.append('tit="'+authors[0]+'"')
+		    queries.append('"' + ' '.join(self.get_title_tokens(title,strip_joiners=True,strip_subtitle=True)) + '" AND "' + ' '.join(self.get_author_tokens(authors,only_first_author=True)) + '"')
 
 
 	    # author but no title
-	    elif authors is None and title is not None:
+	    elif authors_v != [] and title_v == []:
+		for i in authors_v:
+		    if isbn is not None:
+			queries.append('per="'+ i +'" AND num="' + isbn + '"')
+		    else:
+			queries.append('per="'+ i +'"')
+
+		# try with author as title
+		if isbn is not None:
+		    queries.append('tit="' + ' '.join(self.get_author_tokens(authors,only_first_author=True)) + '" AND num="' + isbn + '"')
+		else:
+		    queries.append('tit="' + ' '.join(self.get_author_tokens(authors,only_first_author=True)) + '"')
+
+
+	    # title but no author
+	    elif authors_v == [] and title_v != []:
 		for i in title_v:
 		    if isbn is not None:
-			queries.append('tit="'+i+'" AND num="'+isbn+'"')
+			queries.append('tit="' + i + '" AND num="' + isbn + '"')
 		    else:
-			queries.append('tit="'+i+'"')
+			queries.append('tit="' + i + '"')
 
-		# try with author and title swapped
+		# try with title as author
 		if isbn is not None:
-		    queries.append('per="'+title+'" AND num="'+isbn+'"')
+		    queries.append('per="' + ' '.join(self.get_title_tokens(title,strip_joiners=True,strip_subtitle=True)) + '" AND num="' + isbn + '"')
 		else:
-		    queries.append('per="'+title+'"')
+		    queries.append('per="' + ' '.join(self.get_title_tokens(title,strip_joiners=True,strip_subtitle=True)) + '"')
 
 
 	    # as last resort only use isbn
 	    if isbn is not None:
-		queries.append('num='+isbn)
-
-
-	    # Sort queries descending by length (assumption: longer query -> less but better results)
-	    #queries.sort(key=len)
-	    #queries.reverse()
+		queries.append('num=' + isbn)
 
 
 	# remove duplicate queries
@@ -160,10 +179,14 @@ class DNB_DE(Source):
 	    if i not in uniqueQueries:
 		uniqueQueries.append(i)
 
+
 	# Process queries
 	results = None
 
 	for query in uniqueQueries:
+	    # SRU does not work with "+" or "?" characters in query, so we simply remove them
+	    query = re.sub('[\+\?]','',query)
+
 	    query = query + ' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)'
 	    log.info(query)
 
@@ -240,6 +263,7 @@ class DNB_DE(Source):
 		    # if a,n,p,n,p exist:		series = a + n0 + " - " + p0, 			series_index = n1,	title = p1	(Example: dnb-id 1008774839)
 		    # if a,n,p exist:			series = a,					series_index = n,	title = p
 		    # if a exist:												title = a
+		    # TODO: a,n,p,n (i.e. 956375146)
 
 		    code_p = []
 		    code_n = []
@@ -431,9 +455,9 @@ class DNB_DE(Source):
 
 
 		##### Field 490 #####
-		# In theroy this field is not used for "real" book series, use field 830 instead. But it is used.
+		# In theory this field is not used for "real" book series, use field 830 instead. But it is used.
 		# Series and Series_Index
-		if series is None:
+		if series is None or (series is not None and series_index == "0"):
 		    for i in record.xpath(".//marc21:datafield[@tag='490']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..",namespaces=ns):
 			# Series Index
 			series_index = i.xpath(".//marc21:subfield[@code='v']",namespaces=ns)[0].text.strip()
@@ -458,7 +482,7 @@ class DNB_DE(Source):
 
 		##### Field 246 #####
 		# Series and Series_Index
-		if series is None:
+		if series is None or (series is not None and series_index == "0"):
 		    for i in record.xpath(".//marc21:datafield[@tag='246']/marc21:subfield[@code='a' and string-length(text())>0]",namespaces=ns):
 			match = re.search("^(.+?) ; (\d+[,\.\d+]?)$", i.text.strip())
 			if match is not None:
@@ -476,7 +500,7 @@ class DNB_DE(Source):
 
 		##### Field 800 #####
 		# Series and Series_Index
-		if series is None:
+		if series is None or (series is not None and series_index == "0"):
 		    for i in record.xpath(".//marc21:datafield[@tag='800']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='t' and string-length(text())>0]/..",namespaces=ns):
 			# Series Index
 			series_index = i.xpath(".//marc21:subfield[@code='v']",namespaces=ns)[0].text.strip()
@@ -501,7 +525,7 @@ class DNB_DE(Source):
 
 		##### Field 830 #####
 		# Series and Series_Index
-		if series is None:
+		if series is None or (series is not None and series_index == "0"):
 		    for i in record.xpath(".//marc21:datafield[@tag='830']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..",namespaces=ns):
 			# Series Index
 			series_index = i.xpath(".//marc21:subfield[@code='v']",namespaces=ns)[0].text.strip()
@@ -580,14 +604,20 @@ class DNB_DE(Source):
 
 		##### If configured: Try to separate Series, Series Index and Title from the fetched title #####
 		#if self.cfg_guess_series is True:
-		if series is None and self.cfg_guess_series is True:
+		if (series is None or (series is not None and series_index == "0")) and self.cfg_guess_series is True:
 		    guessed_series = None
 		    guessed_series_index = None
 		    guessed_title = None
+
+		    log.info("Starting Series Guesser")
+
 		    parts = re.split("[:]",self.removeSortingCharacters(title))
 
 		    if len(parts)==2:
+			log.info("Title has two parts")
+			# make sure only one part of the two parts contains digits
 			if bool(re.search("\d",parts[0])) != bool(re.search("\d",parts[1])):
+			    log.info("only one title part contains digits")
 			    # figure out which part contains the index
 			    if bool(re.search("\d",parts[0])):
 				indexpart = parts[0]
@@ -595,12 +625,15 @@ class DNB_DE(Source):
 			    else:
 				indexpart = parts[1]
 				textpart = parts[0]
+
+			    # Look at the part without digits:
 			    match = re.match("^[\s\-–:]*(.+?)[\s\-–:]*$",textpart)	# remove odd characters from start and end of the text part
 			    if match:
 				textpart = match.group(1)
 
-			    # from Titleparts like: "Name of the series - Episode 2"	OK
-			    match = re.match("^\s*(\S.*?)[\(\/\.,\s\-–:]*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",indexpart)
+			    # Look at the part with digits:
+			    # for Titleparts like: "Name of the series - Episode 2"
+			    match = re.match("^\s*(\S\D*?[a-zA-Z]\D*?)\W[\(\/\.,\s\-–:]*(?:#|Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",indexpart)
 			    if match:
 				guessed_series_index = match.group(2)
 				guessed_series = match.group(1)
@@ -609,39 +642,77 @@ class DNB_DE(Source):
 				    guessed_title = textpart + " : Band " + guessed_series_index
 				else:
 				    guessed_title = textpart
+
+				#log.info("ALGO1: guessed_title: " + guessed_title)
+				#log.info("ALGO1: guessed_series: " + guessed_series)
+				#log.info("ALGO1: guessed_series_index: " + guessed_series_index)
+
 			    else:
-				# from Titleparts like: "Episode 2 Name of the series"
-				match = re.match("^\s*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*(\S.*?)[\/\.,\-–\s]*$",indexpart)
+				# for Titleparts like: "Episode 2 Name of the series"
+				match = re.match("^\s*(?:#|Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*(\S\D*?[a-zA-Z]\D*?)[\/\.,\-–\s]*$",indexpart)
 				if match:
 				    guessed_series_index = match.group(1)
 				    guessed_series = match.group(2)
+
 				    if guessed_series is None:
+					# sometimes books with multiple volumes are detected as series without name -> Add the volume to the title 
 					guessed_series = textpart
 					guessed_title = textpart + " : Band " + guessed_series_index
 				    else:
 					guessed_title = textpart
 
+				    #log.info("ALGO2: guessed_title: " + guessed_title)
+				    #log.info("ALGO2: guessed_series: " + guessed_series)
+				    #log.info("ALGO2: guessed_series_index: " + guessed_series_index)
+
+				else:
+				    # for titleparts like: "Band 2"
+				    match = re.match("^[\s\(]*(?:#|Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*[\/\.,\-–\s]*$",indexpart)
+				    if match:
+					guessed_series_index = match.group(1)
+					# ...with textpart like NAME OF SERIES\s[\-\.;:]\sNAME OF TITLE
+					# some false positives
+					match = re.match("^\s*(\w+.+?)\s?[\.;\-–:]+\s(\w+.+)\s*$",textpart)
+					if match:
+					    guessed_series = match.group(1)
+					    guessed_title = match.group(2)
+
+					    log.info("ALGO3: guessed_title: " + guessed_title)
+					    log.info("ALGO3: guessed_series: " + guessed_series)
+					    log.info("ALGO3: guessed_series_index: " + guessed_series_index)
+
+
 		    elif len(parts)==1:
-			# from Titles like: "Name of the series - Title (Episode 2)"
-			match = re.match("^\s*(\S.+?) \- (\S.+?) [\(\/\.,\s\-–:](?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",parts[0])
+			log.info("Title has one part")
+			# for Titles like: "Name of the series - Title (Episode 2)"
+			match = re.match("^\s*(\S.+?) \- (\S.+?) [\(\/\.,\s\-–:](?:#|Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",parts[0])
 			if match:
 			    guessed_series_index = match.group(3)
 			    guessed_series = match.group(1)
 			    guessed_title = match.group(2)
+
+			    #log.info("ALGO4: guessed_title: " + guessed_title)
+			    #log.info("ALGO4: guessed_series: " + guessed_series)
+			    #log.info("ALGO4: guessed_series_index: " + guessed_series_index)
+
 			else:
-			    # from Titles like: "Name of the series - Episode 2"
-			    match = re.match("^\s*(\S.+?)[\(\/\.,\s\-–:]*(?:Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",parts[0])
+			    # for Titles like: "Name of the series - Episode 2"
+			    match = re.match("^\s*(\S.+?)[\(\/\.,\s\-–:]*(?:#|Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$",parts[0])
 			    if match:
 				guessed_series_index = match.group(2)
 				guessed_series = match.group(1)
 				guessed_title = guessed_series + " : Band " + guessed_series_index
 
+				#log.info("ALGO5: guessed_title: " + guessed_title)
+				#log.info("ALGO5: guessed_series: " + guessed_series)
+				#log.info("ALGO5: guessed_series_index: " + guessed_series_index)
+
 		    # Log
 		    if guessed_series is not None:
-			log.info("Guessed Series: %s" % series)
+			log.info("Guessed Series: %s" % guessed_series)
 			#guessed_series = self.cleanUpSeries(log, guessed_series, publisher_name)
 		    if guessed_series_index is not None:
-			log.info("Guessed Series Index: %s" % series_index)
+			log.info("Guessed Series Index: %s" % guessed_series_index)
 		    if guessed_title is not None:
 			log.info("Guessed Title: %s" % guessed_title)
 			guessed_title = self.cleanUpTitle(log, guessed_title)
@@ -724,6 +795,12 @@ class DNB_DE(Source):
 
     def cleanUpSeries(self, log, series, publisher_name):
 	if series is not None:
+	    # series must at least contain a single character or digit
+	    match = re.search('[\w\d]', series)
+	    if not match:
+		#log.info("Series must at least contain a single character or digit, ignoring")
+		return None
+
 	    # remove sorting word markers
 	    series = ''.join([c for c in series if ord(c)!=152 and ord(c)!=156])
 
@@ -741,12 +818,15 @@ class DNB_DE(Source):
 		    if re.search('^'+pubcompany,series,flags=re.IGNORECASE):
 			log.info("Series starts with publisher name, ignoring")
 			return None
+
 	    # do not accept some other unwanted series names
 	    # TODO: Has issues with Umlaus in regex (or series string?)
 	    for i in [
-		'^dtv$','^Oettinger-Taschenbuch$','^Haymon-Taschenbuch$','^Mira Taschenbuch$','^Suhrkamp-Taschenbuch$','^Bastei-L','^Hey$','^btb$', '^bt-Kinder', \
-		'^blanvalet$','^KiWi$','^Piper$','^C.H. Beck','^Rororo','^Goldmann$','^Moewig$','^Fischer Klassik$','^hey! shorties$','^Ullstein', \
-		'^Unionsverlag','^Ariadne-Krimi','^C.-Bertelsmann']:
+		'^\[Ariadne\]$','^Ariadne$','^atb$','^BvT$','^Bastei L','^bb$','^Beck Paperback','^Beck\-.*berater','^Beck\'sche Reihe','^Bibliothek Suhrkamp$', '^BLT$', \
+		'^DLV-Taschenbuch$', '^Edition Suhrkamp$', '^Edition Lingen Stiftung$','^Edition C','^Edition Metzgenstein$','^ETB$', '^dtv', '^Ein Goldmann', \
+		'^Oettinger-Taschenbuch$','^Haymon-Taschenbuch$','^Mira Taschenbuch$','^Suhrkamp-Taschenbuch$','^Bastei-L','^Hey$','^btb$', '^bt-Kinder', '^Ravensburger', \
+		'^Sammlung Luchterhand$', '^blanvalet$','^KiWi$','^Piper$','^C.H. Beck','^Rororo','^Goldmann$','^Moewig$','^Fischer Klassik$','^hey! shorties$','^Ullstein', \
+		'^Unionsverlag','^Ariadne-Krimi','^C.-Bertelsmann','^Phantastische Bibliothek$','^Beck Paperback$','^Beck\'sche Reihe$','^Knaur', '^Volk-und-Welt' ]:
 		if re.search(i,series,flags=re.IGNORECASE):
 		    log.info("Series contains unwanted string %s, ignoring" % i)
 		    return None
