@@ -19,7 +19,7 @@ from Queue import Queue, Empty
 
 class DNB_DE(Source):
     name = 'DNB_DE'
-    description = _('Downloads metadata from the DNB (Deutsche National Bibliothek). Requires a personal SRU Access Token')
+    description = _('Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
     version = (2, 1, 2)
@@ -58,6 +58,9 @@ class DNB_DE(Source):
 
     def identify(self, log, result_queue, abort, title=None, authors=[], identifiers={}, timeout=30):
 	self.load_config()
+
+	if authors is None:
+	    authors=[]
 
 	# get identifying tags from book
 	idn = identifiers.get('dnb-idn', None)
@@ -459,16 +462,36 @@ class DNB_DE(Source):
 		# Series and Series_Index
 		if series is None or (series is not None and series_index == "0"):
 		    for i in record.xpath(".//marc21:datafield[@tag='490']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..",namespaces=ns):
-			# Series Index
-			series_index = i.xpath(".//marc21:subfield[@code='v']",namespaces=ns)[0].text.strip()
-			match = re.search("(\d+[,\.\d+]?)", series_index)
-			if match is not None:
-			    series_index = match.group(1)
+			# "v" either "Nr. 220" or "This great Seriestitle : Nr. 220" - if available use this instead of attribute a
+			attr_v = i.xpath(".//marc21:subfield[@code='v']",namespaces=ns)[0].text.strip()
+			parts = re.split(" : ",attr_v)
+			if len(parts)==2:
+			    if bool(re.search("\d",parts[0])) != bool(re.search("\d",parts[1])):
+				# figure out which part contains the index
+				if bool(re.search("\d",parts[0])):
+				    indexpart = parts[0]
+				    textpart = parts[1]
+				else:
+				    indexpart = parts[1]
+				    textpart = parts[0]
+
+				match = re.search("(\d+[,\.\d+]?)", indexpart)
+				if match is not None:
+				    series_index = match.group(1)
+				    series = textpart.strip()
+
 			else:
-			    series_index = "0"
+			    match = re.search("(\d+[,\.\d+]?)", attr_v)
+			    if match is not None:
+				series_index = match.group(1)
+			    else:
+				series_index = "0"
+
 			series_index = series_index.replace(',','.')
-			# Series
-			series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
+
+			# Use Series Name from attribute "a" if not already found in attribute "v"
+			if series is None:
+			    series = i.xpath(".//marc21:subfield[@code='a']",namespaces=ns)[0].text.strip()
 
 			# Log
 			if series_index is not None:
