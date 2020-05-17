@@ -35,3 +35,4 @@ The Token is free of charge.
 ### Limitations and caveats
 
 - The returned publication date contains only the year, not the precise date.
+- This plugin has no autoupdater.
