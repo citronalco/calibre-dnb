@@ -6,11 +6,13 @@ It supports retrieval of DNB-IDN, ISBN, authors, title, edition, tags, publicati
 For books without series information it can try to extract series and series index from the title.
 GND and/or non-GND subjects can be used as tags.
 
+This plugin works with Python 2 and Python 3.
+
 ### Requirements:
 
 None.
 
-For better performance and stability it is recommended to use a personal SRU Access Token. The Token is free of charge, you can get it from the DNB.
+For better performance it is recommended to use a personal SRU Access Token. The Token is free of charge, you can get it from the DNB.
 With this token this plugin will use DNB's SRU API, without token it will do web scraping. The downloaded metadata is the same in each case.
 
 ### Installation:
