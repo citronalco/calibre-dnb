@@ -1037,27 +1037,27 @@ class DNB_DE(Source):
             self.cfg_dnb_token, quote(query.encode('utf-8')))
         log.info('Query URL: %s' % queryUrl)
 
-        root = None
+        xmlData = None
         try:
             data = self.browser.open_novisit(queryUrl, timeout=timeout).read()
             #log.info('Got some data: %s' % data)
 
-            root = etree.XML(data)
-            # log.info(etree.tostring(root,pretty_print=True))
-            numOfRecords = root.find(
-                '{http://www.loc.gov/zing/srw/}numberOfRecords').text
+            xmlData = etree.XML(data)
+            # log.info(etree.tostring(xmlData,pretty_print=True))
+
+            numOfRecords = xmlData.xpath(".//zs:numberOfRecords", namespaces={"zs": "http://www.loc.gov/zing/srw/"})[0].text.strip()
             log.info('Got records: %s' % numOfRecords)
 
             if int(numOfRecords) == 0:
                 return None
 
-            return root.xpath(".//marc21:record", namespaces={"marc21": "http://www.loc.gov/MARC21/slim"})
+            return xmlData.xpath(".//marc21:record", namespaces={"marc21": "http://www.loc.gov/MARC21/slim"})
         except:
             try:
                 diag = ": ".join([
-                    root.find('diagnostics/diag:diagnostic/diag:details', namespaces={
+                    xmlData.find('diagnostics/diag:diagnostic/diag:details', namespaces={
                               None: 'http://www.loc.gov/zing/srw/', 'diag': 'http://www.loc.gov/zing/srw/diagnostic/'}).text,
-                    root.find('diagnostics/diag:diagnostic/diag:message', namespaces={
+                    xmlData.find('diagnostics/diag:diagnostic/diag:message', namespaces={
                               None: 'http://www.loc.gov/zing/srw/', 'diag': 'http://www.loc.gov/zing/srw/diagnostic/'}).text
                 ])
                 log.error('ERROR: %s' % diag)
@@ -1073,14 +1073,14 @@ class DNB_DE(Source):
         resultNum = 0
         while resultNum < 100:
             queryUrl = self.SCRAPEURL % (quote_plus(
-                query.encode('utf-8')+"&any"), str(resultNum))
+                query.encode('utf-8')+str("&any").encode('utf-8')), str(resultNum))
             log.info('Query URL: %s' % queryUrl)
             try:
                 webpage = self.browser.open_novisit(
                     queryUrl, timeout=timeout).read()
-                webroot = etree.HTML(webpage)
+                htmlData = etree.HTML(webpage)
 
-                marc21links = webroot.xpath(
+                marc21links = htmlData.xpath(
                     u".//a[text()='MARC21-XML-Repräsentation dieses Datensatzes']/@href")
                 if len(marc21links) == 0:
                     break
