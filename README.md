@@ -1,6 +1,6 @@
 # DNB metadata plugin for Calibre
 
-A Calibre metadata source plugin that uses the catalogue (https://portal.dnb.de) of the Deutsche Nationalbibliothek (DNB) to retrieve metadata. DNB is the German central archival library. Publishers are required to send them a copy of every book for archival, so it's the largest metadata source for German literature.
+A Calibre metadata source plugin that uses the catalogue (https://portal.dnb.de) of the Deutsche Nationalbibliothek (DNB) to retrieve metadata. DNB is the German central archival library. German publishers are required to send them a copy of every book for archival, so it's the largest metadata source for literature published in Germany.
 
 This plugin supports retrieval of DNB-IDN, ISBN, authors, title, edition, tags, publication date, languages, publisher, comments, series, series index and cover.
 
