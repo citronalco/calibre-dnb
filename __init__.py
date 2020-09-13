@@ -266,6 +266,7 @@ class DNB_DE(Source):
             log.info("Parsing records")
 
             ns = {'marc21': 'http://www.loc.gov/MARC21/slim'}
+
             for record in results:
                 series = None
                 series_index = None
@@ -290,27 +291,27 @@ class DNB_DE(Source):
                 ##### Field 264 #####
                 # Publisher Name and Location
                 fields = record.xpath(
-                    ".//marc21:datafield[@tag='264']/marc21:subfield[@code='b' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns)
+                    "./marc21:datafield[@tag='264']/marc21:subfield[@code='b' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns)
                 if len(fields) > 0:
                     publisher_name = fields[0].xpath(
-                        ".//marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                        "./marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns)[0].text.strip()
                     publisher_location = fields[0].xpath(
-                        ".//marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                        "./marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
                 else:
                     fields = record.xpath(
-                        ".//marc21:datafield[@tag='264']/marc21:subfield[@code='b' and string-length(text())>0]/../..", namespaces=ns)
+                        "./marc21:datafield[@tag='264']/marc21:subfield[@code='b' and string-length(text())>0]/../..", namespaces=ns)
                     if len(fields) > 0:
                         publisher_name = fields[0].xpath(
-                            ".//marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                            "./marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns)[0].text.strip()
                     else:
                         fields = record.xpath(
-                            ".//marc21:datafield[@tag='264']/marc21:subfield[@code='a' and string-length(text())>0]/../..", namespaces=ns)
+                            "./marc21:datafield[@tag='264']/marc21:subfield[@code='a' and string-length(text())>0]/../..", namespaces=ns)
                         if len(fields) > 0:
                             publisher_location = fields[0].xpath(
-                                ".//marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                                "./marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
 
                 # Publishing Date
-                for i in record.xpath(".//marc21:datafield[@tag='264']/marc21:subfield[@code='c' and string-length(text())>=4]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='264']/marc21:subfield[@code='c' and string-length(text())>=4]", namespaces=ns):
                     match = re.search("(\d{4})", i.text.strip())
                     if match is not None:
                         year = match.group(1)
@@ -330,17 +331,17 @@ class DNB_DE(Source):
                 # a = title, n = number of part, p = name of part - ok
                 # Title/Series/Series_Index
                 title_parts = []
-                for i in record.xpath(".//marc21:datafield[@tag='245']/marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='245']/marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
                     code_a = []
                     code_n = []
                     code_p = []
 
                     # a
-                    for j in i.xpath(".//marc21:subfield[@code='a']", namespaces=ns):
+                    for j in i.xpath("./marc21:subfield[@code='a']", namespaces=ns):
                         code_a.append(j.text.strip())
 
                     # n
-                    for j in i.xpath(".//marc21:subfield[@code='n']", namespaces=ns):
+                    for j in i.xpath("./marc21:subfield[@code='n']", namespaces=ns):
                         match = re.search("(\d+([,\.]\d+)?)", j.text.strip())
                         if match:
                             code_n.append(match.group(1))
@@ -349,7 +350,7 @@ class DNB_DE(Source):
                             code_n.append("0")
 
                     # p
-                    for j in i.xpath(".//marc21:subfield[@code='p']", namespaces=ns):
+                    for j in i.xpath("./marc21:subfield[@code='p']", namespaces=ns):
                         code_p.append(j.text.strip())
 
                     # Title
@@ -415,12 +416,12 @@ class DNB_DE(Source):
                             series_index = code_n[-1]
 
                 # subtitle 1: Field 245, b
-                for i in record.xpath(".//marc21:datafield[@tag='245']/marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='245']/marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns):
                     title_parts.append(i.text.strip())
                     break
 
                 # subtitle 2
-                # for i in record.xpath(".//marc21:datafield[@tag='245']/marc21:subfield[@code='c' and string-length(text())>0]",namespaces=ns):
+                # for i in record.xpath("./marc21:datafield[@tag='245']/marc21:subfield[@code='c' and string-length(text())>0]",namespaces=ns):
                 #    title = title + " / " + i.text.strip()
                 #    break
 
@@ -457,16 +458,16 @@ class DNB_DE(Source):
                 ##### Field 100 and Field 700 #####
                 # Authors
                 # primary authors
-                for i in record.xpath(".//marc21:datafield[@tag='100']/marc21:subfield[@code='4' and text()='aut']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='100']/marc21:subfield[@code='4' and text()='aut']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     name = re.sub(" \[.*\]$", "", i.text.strip())
                     authors.append(name)
                 # secondary authors
-                for i in record.xpath(".//marc21:datafield[@tag='700']/marc21:subfield[@code='4' and text()='aut']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='700']/marc21:subfield[@code='4' and text()='aut']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     name = re.sub(" \[.*\]$", "", i.text.strip())
                     authors.append(name)
-                if len(authors) == 0:  # if no "real" autor was found take all persons involved
+                if len(authors) == 0:  # if no "real" author was found take all persons involved
                     # secondary authors
-                    for i in record.xpath(".//marc21:datafield[@tag='700']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                    for i in record.xpath("./marc21:datafield[@tag='700']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                         name = re.sub(" \[.*\]$", "", i.text.strip())
                         authors.append(name)
                 if len(authors) > 0:
@@ -480,7 +481,7 @@ class DNB_DE(Source):
 
                 ##### Field 856 #####
                 # Comments
-                for i in record.xpath(".//marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>0]", namespaces=ns):
                     if i.text.startswith("http://deposit.dnb.de/"):
                         br = self.browser
                         log.info('Downloading Comments from: %s' % i.text)
@@ -502,7 +503,7 @@ class DNB_DE(Source):
                 # TODO: Make this configurable (default: yes)
                 if comments is None:
                     # get all other issues
-                    for i in record.xpath(".//marc21:datafield[@tag='776']/marc21:subfield[@code='w' and string-length(text())>0]", namespaces=ns):
+                    for i in record.xpath("./marc21:datafield[@tag='776']/marc21:subfield[@code='w' and string-length(text())>0]", namespaces=ns):
                         other_idn = re.sub("^\(.*\)", "", i.text.strip())
                         subquery = 'num='+other_idn + \
                             ' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)'
@@ -519,7 +520,7 @@ class DNB_DE(Source):
                             continue
 
                         for subrecord in subresults:
-                            for i in subrecord.xpath(".//marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>0]", namespaces=ns):
+                            for i in subrecord.xpath("./marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>0]", namespaces=ns):
                                 if i.text.startswith("http://deposit.dnb.de/"):
                                     br = self.browser
                                     log.info(
@@ -542,7 +543,7 @@ class DNB_DE(Source):
 
                 ##### Field 16 #####
                 # ID: IDN
-                for i in record.xpath(".//marc21:datafield[@tag='016']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='016']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     idn = i.text.strip()
                     break
                 # Log
@@ -551,7 +552,7 @@ class DNB_DE(Source):
 
                 ##### Field 24 #####
                 # ID: URN
-                for i in record.xpath(".//marc21:datafield[@tag='024']/marc21:subfield[@code='2' and text()='urn']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='024']/marc21:subfield[@code='2' and text()='urn']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     urn = i.text.strip()
                     break
 
@@ -561,7 +562,7 @@ class DNB_DE(Source):
 
                 ##### Field 20 #####
                 # ID: ISBN
-                for i in record.xpath(".//marc21:datafield[@tag='020']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='020']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     isbn_regex = "(?:ISBN(?:-1[03])?:? )?(?=[-0-9 ]{17}|[-0-9X ]{13}|[0-9X]{10})(?:97[89][- ]?)?[0-9]{1,5}[- ]?(?:[0-9]+[- ]?){2}[0-9X]"
                     match = re.search(isbn_regex, i.text.strip())
                     isbn = match.group()
@@ -581,7 +582,7 @@ class DNB_DE(Source):
 
                 ##### Field 82 #####
                 # ID: Sachgruppe (DDC)
-                for i in record.xpath(".//marc21:datafield[@tag='082']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='082']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     ddc.append(i.text.strip())
 
                 # Log
@@ -592,10 +593,10 @@ class DNB_DE(Source):
                 # In theory this field is not used for "real" book series, use field 830 instead. But it is used.
                 # Series and Series_Index
                 if series is None or (series is not None and series_index == "0"):
-                    for i in record.xpath(".//marc21:datafield[@tag='490']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
+                    for i in record.xpath("./marc21:datafield[@tag='490']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
                         # "v" either "Nr. 220" or "This great Seriestitle : Nr. 220" - if available use this instead of attribute a
                         attr_v = i.xpath(
-                            ".//marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
+                            "./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
                         parts = re.split(" : ", attr_v)
                         if len(parts) == 2:
                             if bool(re.search("\d", parts[0])) != bool(re.search("\d", parts[1])):
@@ -625,7 +626,7 @@ class DNB_DE(Source):
                         # Use Series Name from attribute "a" if not already found in attribute "v"
                         if series is None:
                             series = i.xpath(
-                                ".//marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
+                                "./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
 
                         # Log
                         if series_index is not None:
@@ -642,7 +643,7 @@ class DNB_DE(Source):
                 ##### Field 246 #####
                 # Series and Series_Index
                 if series is None or (series is not None and series_index == "0"):
-                    for i in record.xpath(".//marc21:datafield[@tag='246']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                    for i in record.xpath("./marc21:datafield[@tag='246']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                         match = re.search(
                             "^(.+?) ; (\d+[,\.\d+]?)$", i.text.strip())
                         if match is not None:
@@ -664,10 +665,10 @@ class DNB_DE(Source):
                 ##### Field 800 #####
                 # Series and Series_Index
                 if series is None or (series is not None and series_index == "0"):
-                    for i in record.xpath(".//marc21:datafield[@tag='800']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='t' and string-length(text())>0]/..", namespaces=ns):
+                    for i in record.xpath("./marc21:datafield[@tag='800']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='t' and string-length(text())>0]/..", namespaces=ns):
                         # Series Index
                         series_index = i.xpath(
-                            ".//marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
+                            "./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
                         match = re.search("(\d+[,\.\d+]?)", series_index)
                         if match is not None:
                             series_index = match.group(1)
@@ -676,7 +677,7 @@ class DNB_DE(Source):
                         series_index = series_index.replace(',', '.')
                         # Series
                         series = i.xpath(
-                            ".//marc21:subfield[@code='t']", namespaces=ns)[0].text.strip()
+                            "./marc21:subfield[@code='t']", namespaces=ns)[0].text.strip()
 
                         # Log
                         if series_index is not None:
@@ -693,10 +694,10 @@ class DNB_DE(Source):
                 ##### Field 830 #####
                 # Series and Series_Index
                 if series is None or (series is not None and series_index == "0"):
-                    for i in record.xpath(".//marc21:datafield[@tag='830']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
+                    for i in record.xpath("./marc21:datafield[@tag='830']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
                         # Series Index
                         series_index = i.xpath(
-                            ".//marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
+                            "./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
                         match = re.search("(\d+[,\.\d+]?)", series_index)
                         if match is not None:
                             series_index = match.group(1)
@@ -705,7 +706,7 @@ class DNB_DE(Source):
                         series_index = series_index.replace(',', '.')
                         # Series
                         series = i.xpath(
-                            ".//marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
+                            "./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
 
                         # Log
                         if series_index is not None:
@@ -721,10 +722,10 @@ class DNB_DE(Source):
 
                 ##### Field 689 #####
                 # GND Subjects
-                for i in record.xpath(".//marc21:datafield[@tag='689']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='689']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     subjects_gnd.append(i.text.strip())
                 for f in range(600, 656):
-                    for i in record.xpath(".//marc21:datafield[@tag='"+str(f)+"']/marc21:subfield[@code='2' and text()='gnd']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                    for i in record.xpath("./marc21:datafield[@tag='"+str(f)+"']/marc21:subfield[@code='2' and text()='gnd']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                         if i.text.startswith("("):
                             continue
                         subjects_gnd.append(i.text)
@@ -738,7 +739,7 @@ class DNB_DE(Source):
                 # TODO: Remove sorting characters
                 # Non-GND subjects
                 for f in range(600, 656):
-                    for i in record.xpath(".//marc21:datafield[@tag='"+str(f)+"']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                    for i in record.xpath("./marc21:datafield[@tag='"+str(f)+"']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                         # ignore entries starting with "(":
                         if i.text.startswith("("):
                             continue
@@ -755,7 +756,7 @@ class DNB_DE(Source):
 
                 ##### Field 250 #####
                 # Edition
-                for i in record.xpath(".//marc21:datafield[@tag='250']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='250']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     edition = i.text.strip()
                     break
 
@@ -765,7 +766,7 @@ class DNB_DE(Source):
 
                 ##### Field 41 #####
                 # Languages
-                for i in record.xpath(".//marc21:datafield[@tag='041']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                for i in record.xpath("./marc21:datafield[@tag='041']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     languages.append(i.text.strip())
 
                 # Log
@@ -1045,13 +1046,13 @@ class DNB_DE(Source):
             xmlData = etree.XML(data)
             # log.info(etree.tostring(xmlData,pretty_print=True))
 
-            numOfRecords = xmlData.xpath(".//zs:numberOfRecords", namespaces={"zs": "http://www.loc.gov/zing/srw/"})[0].text.strip()
+            numOfRecords = xmlData.xpath("./zs:numberOfRecords", namespaces={"zs": "http://www.loc.gov/zing/srw/"})[0].text.strip()
             log.info('Got records: %s' % numOfRecords)
 
             if int(numOfRecords) == 0:
                 return None
 
-            return xmlData.xpath(".//marc21:record", namespaces={"marc21": "http://www.loc.gov/MARC21/slim"})
+            return xmlData.xpath("./zs:records/zs:record/zs:recordData/marc21:record", namespaces={'marc21': 'http://www.loc.gov/MARC21/slim', "zs": "http://www.loc.gov/zing/srw/"})
         except:
             try:
                 diag = ": ".join([
