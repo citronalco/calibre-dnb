@@ -18,12 +18,12 @@ With this token this plugin will use DNB's SRU API, without token it will do web
 
 ### Installation:
 
-1. Download the latest plugin version from the "Releases" page (https://github.com/citronalco/calibre-dnb/releases/)
 1. Start Calibre
-1. In "Preferences", section "Advanced" click on "Plugins"
-1. "Load plugin from file"
-1. Choose the downloaded dnb-metadata-plugin zip file
+1. Go to "Preferences" -> "Plugins" and click on the "Get new plugins" button.
+1. Search for "Deutsche Nationalbibliothek" and click the "Install" button.
 1. Restart Calibre
+
+You can also downloaded the plugin as ZIP file from here: https://github.com/citronalco/calibre-dnb/releases/
 
 ### How to get a SRU Access Token (optional):
 
@@ -38,4 +38,3 @@ The Token is free of charge.
 ### Limitations and caveats
 
 - The returned publication date contains only the year, not the precise date.
-- This plugin has no autoupdater.
