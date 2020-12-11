@@ -554,7 +554,10 @@ class DNB_DE(Source):
                 # ID: URN
                 for i in record.xpath("./marc21:datafield[@tag='024']/marc21:subfield[@code='2' and text()='urn']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     urn = i.text.strip()
-                    break
+                    match = re.search("^urn:(.+)$", urn)
+                    if match:
+                         urn = match.group(1)
+                         break
 
                 # Log
                 if urn is not None:
