@@ -35,7 +35,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 0, 0)
+    version = (3, 0, 1)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -47,7 +47,7 @@ class DNB_DE(Source):
     cached_cover_url_is_reliable = True
     prefer_results_with_isbn = True
 
-    QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&accessToken=%s&maximumRecords=100&operation=searchRetrieve&recordSchema=MARC21-xml&query=%s'
+    QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&maximumRecords=100&operation=searchRetrieve&recordSchema=MARC21-xml&query=%s'
     SCRAPEURL = 'https://portal.dnb.de/opac.htm?method=showFullRecord&currentResultId=%s&currentPosition=%s'
     COVERURL = 'https://portal.dnb.de/opac/mvb/cover.htm?isbn=%s'
 
@@ -60,11 +60,6 @@ class DNB_DE(Source):
             cfg.KEY_APPEND_EDITION_TO_TITLE, False)
         self.cfg_fetch_subjects = cfg.plugin_prefs[cfg.STORE_NAME].get(
             cfg.KEY_FETCH_SUBJECTS, 2)
-        self.cfg_dnb_token = cfg.plugin_prefs[cfg.STORE_NAME].get(
-            cfg.KEY_SRUTOKEN, None)
-
-        if self.cfg_dnb_token == "enter-your-sru-token-here" or len(self.cfg_dnb_token) == 0:
-            self.cfg_dnb_token = None
 
     def config_widget(self):
         self.cw = None
@@ -255,10 +250,7 @@ class DNB_DE(Source):
                 ' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)'
             log.info(query)
 
-            if self.cfg_dnb_token is None:
-                results = self.getSearchResultsByScraping(log, query, timeout)
-            else:
-                results = self.getSearchResults(log, query, timeout)
+            results = self.getSearchResults(log, query, timeout)
 
             if results is None:
                 continue
@@ -509,12 +501,8 @@ class DNB_DE(Source):
                             ' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)'
                         log.info(subquery)
 
-                        if self.cfg_dnb_token is None:
-                            subresults = self.getSearchResultsByScraping(
-                                log, subquery, timeout)
-                        else:
-                            subresults = self.getSearchResults(
-                                log, subquery, timeout)
+                        subresults = self.getSearchResults(
+                            log, subquery, timeout)
 
                         if subresults is None:
                             continue
@@ -1037,8 +1025,7 @@ class DNB_DE(Source):
     def getSearchResults(self, log, query, timeout=30):
         log.info('Querying: %s' % query)
 
-        queryUrl = self.QUERYURL % (
-            self.cfg_dnb_token, quote(query.encode('utf-8')))
+        queryUrl = self.QUERYURL % (quote(query.encode('utf-8')))
         log.info('Query URL: %s' % queryUrl)
 
         xmlData = None
@@ -1069,37 +1056,6 @@ class DNB_DE(Source):
             except:
                 log.error('ERROR: Got no valid response.')
                 return None
-
-    def getSearchResultsByScraping(self, log, query, timeout=30):
-        log.info('Querying: %s' % query)
-
-        m21records = []
-        resultNum = 0
-        while resultNum < 100:
-            queryUrl = self.SCRAPEURL % (quote_plus(
-                query.encode('utf-8')+str("&any").encode('utf-8')), str(resultNum))
-            log.info('Query URL: %s' % queryUrl)
-            try:
-                webpage = self.browser.open_novisit(
-                    queryUrl, timeout=timeout).read()
-                htmlData = etree.HTML(webpage)
-
-                marc21links = htmlData.xpath(
-                    u".//a[text()='MARC21-XML-Repräsentation dieses Datensatzes']/@href")
-                if len(marc21links) == 0:
-                    break
-
-                m21data = self.browser.open_novisit(
-                    marc21links[0], timeout=timeout).read()
-                m21records.append(etree.XML(m21data))
-                resultNum += 1
-            except:
-                log.info("Got no response.")
-                resultNum += 1
-
-        log.info("Got records: %s " % len(m21records))
-
-        return m21records
 
     def get_cached_cover_url(self, identifiers):
         url = None

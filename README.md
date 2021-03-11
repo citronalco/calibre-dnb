@@ -9,13 +9,6 @@ GND and/or non-GND subjects can be used as tags.
 
 This plugin works with Python 2 and Python 3.
 
-### Requirements:
-
-None.
-
-For better performance it is recommended to use a personal SRU Access Token. The Token is free of charge, you can get it from the DNB.
-With this token this plugin will use DNB's SRU API, without token it will do web scraping. The downloaded metadata is the same in each case.
-
 ### Installation:
 
 1. Start Calibre
@@ -25,16 +18,6 @@ With this token this plugin will use DNB's SRU API, without token it will do web
 
 You can also downloaded the plugin as ZIP file from here: https://github.com/citronalco/calibre-dnb/releases/
 
-### How to get a SRU Access Token (optional):
+### Limitations:
 
-1. Create a free account at https://portal.dnb.de/myAccount/register.htm
-1. Write an email to schnittstellen-service@dnb.de and ask them to enable SRU Access Token generation for your login name and that you want to access the title data catalogue ("Titeldaten-Katalog") in MARC21-xml format.
-1. Wait for their confirmation email.
-1. Log in into your DNB account and create an Access Token.
-1. Enter the Access Token into this plugin's settings page.
-
-The Token is free of charge.
-
-### Limitations and caveats
-
-- The returned publication date contains only the year, not the precise date.
+- Publication date: DNB only has the publication year, not the precise date.
