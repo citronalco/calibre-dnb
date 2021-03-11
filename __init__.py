@@ -95,20 +95,21 @@ class DNB_DE(Source):
 
         if idn is not None:
             exact_search['idn'] = idn
-            # in case look for a IDN only search for the IDN and skip all the other stuff
+            # if IDN is given only search for the IDN and skip all the other stuff
             queries.append('num='+idn)
 
-        else:
-            authors_v = []
-            title_v = []
+        if isbn is not None:
+            # if ISBN is given only search for the ISBN and skip all the other stuff
+            queries.append('num='+isbn)
 
+        else:
             #authors = []
             #title = None
             #isbn = None
             #title = re.sub('^(Der|Die|Das|Ein|Eine) ', '', title)
 
-
             # create some variants of given authors
+            authors_v = []
             if authors != []:
                 # concat all author names ("Peter Meier Luise Stark")
                 authors_v.append(' '.join(self.get_author_tokens(
@@ -125,6 +126,7 @@ class DNB_DE(Source):
                         unique_authors_v.append(i)
 
             # create some variants of given title
+            title_v = []
             if title is not None:
                 title_v.append(title)  # simply use given title
                 title_v.append(' '.join(self.get_title_tokens(
