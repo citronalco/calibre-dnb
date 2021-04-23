@@ -48,7 +48,6 @@ class DNB_DE(Source):
     prefer_results_with_isbn = True
 
     QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&maximumRecords=100&operation=searchRetrieve&recordSchema=MARC21-xml&query=%s'
-    SCRAPEURL = 'https://portal.dnb.de/opac.htm?method=showFullRecord&currentResultId=%s&currentPosition=%s'
     COVERURL = 'https://portal.dnb.de/opac/mvb/cover.htm?isbn=%s'
 
     def load_config(self):
