@@ -35,7 +35,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 0, 1)
+    version = (3, 1, 0)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -83,11 +83,13 @@ class DNB_DE(Source):
         for i in ignored_authors:
             authors = [x for x in authors if x != i]
 
-        if (isbn is None) and (idn is None) and (title is None) and (authors is None):
+        # exit on insufficient inputs
+        if (isbn is None) and (idn is None) and (title is None) and (len(authors) == 0):
             log.info(
                 "This plugin requires at least either ISBN, IDN, Title or Author(s).")
             return None
 
+        # build queries
         queries = []
         # DNB does not do an exact search when searching for a idn or isbn, so we have to filter the results
         exact_search = {}
@@ -104,19 +106,22 @@ class DNB_DE(Source):
         else:
             #authors = []
             #title = None
-            #isbn = None
             #title = re.sub('^(Der|Die|Das|Ein|Eine) ', '', title)
 
             # create some variants of given authors
             authors_v = []
-            if authors != []:
+            if len(authors) > 0:
                 # concat all author names ("Peter Meier Luise Stark")
                 authors_v.append(' '.join(self.get_author_tokens(
                     authors, only_first_author=False)))
+
+                # use only first author
                 authors_v.append(' '.join(self.get_author_tokens(
-                    authors, only_first_author=True)))  # use only first author
+                    authors, only_first_author=True)))
+
+                # use all authors, one by one
                 for a in authors:
-                    authors_v.append(a)  # use all authors, one by one
+                    authors_v.append(a)
 
                 # remove duplicates
                 unique_authors_v = []
@@ -124,18 +129,25 @@ class DNB_DE(Source):
                     if i not in unique_authors_v:
                         unique_authors_v.append(i)
 
+
             # create some variants of given title
             title_v = []
             if title is not None:
-                title_v.append(title)  # simply use given title
+                # simply use given title
+                title_v.append(title)
+
+                # remove some punctation characters
                 title_v.append(' '.join(self.get_title_tokens(
-                    title, strip_joiners=False, strip_subtitle=False)))  # remove some punctation characters
+                    title, strip_joiners=False, strip_subtitle=False)))
+
                 # remove subtitle (everything after " : ")
                 title_v.append(' '.join(self.get_title_tokens(
                     title, strip_joiners=False, strip_subtitle=True)))
+
                 # remove some punctation characters and joiners ("and", "&", ...)
                 title_v.append(' '.join(self.get_title_tokens(
                     title, strip_joiners=True, strip_subtitle=False)))
+
                 # remove subtitle (everything after " : ") and joiners ("and", "&", ...)
                 title_v.append(' '.join(self.get_title_tokens(
                     title, strip_joiners=True, strip_subtitle=True)))
@@ -161,65 +173,50 @@ class DNB_DE(Source):
                     if i not in unique_title_v:
                         unique_title_v.append(i)
 
+                # loop through all generated title variants and split them if they contain a digit at the end ("The book of examples 02")
+                title_v2 = []
+                for i in unique_title_v:
+                    match = re.search("^(.+)\s+0*(\d+)$", i)
+                    if match:
+                      title_v2.append([match.group(1), match.group(2)])
+                    else:
+                      title_v2.append([i])
+
+            #### create queries
             # title and author
-            if authors_v != [] and title_v != []:
+            if authors_v != [] and title_v2 != []:
                 for a in authors_v:
-                    for t in title_v:
-                        if isbn is not None:
-                            queries.append(
-                                'tit="' + t + '" AND per="' + a + '" AND num="' + isbn + '"')
-                        else:
-                            queries.append(
-                                'tit="' + t + '" AND per="' + a + '"')
+                     for t in title_v2:
+                        queries.append(
+                          " AND ".join(list(map(lambda x: 'tit="%s"' % x, t)) + [ 'per="%s"' % a ])
+                        )
 
                 # try with first author as title and title (without subtitle) as author
-                if isbn is not None:
-                    queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) +
-                                   '" AND tit="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '" AND num="'+isbn+'"')
-                else:
-                    queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)
-                                                      ) + '" AND tit="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
+                queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)
+                                                  ) + '" AND tit="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
 
                 # try with author and title (without subtitle) in any index
-                if isbn is not None:
-                    queries.append('"' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) +
-                                   '" AND "' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '" AND num="'+isbn+'"')
-                else:
-                    queries.append('"' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)
+                queries.append('"' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)
                                                   ) + '" AND "' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
 
             # author but no title
             elif authors_v != [] and title_v == []:
                 for i in authors_v:
-                    if isbn is not None:
-                        queries.append(
-                            'per="' + i + '" AND num="' + isbn + '"')
-                    else:
-                        queries.append('per="' + i + '"')
+                    queries.append('per="' + i + '"')
 
                 # try with author as title
-                if isbn is not None:
-                    queries.append('tit="' + ' '.join(self.get_author_tokens(authors,
-                                                                             only_first_author=True)) + '" AND num="' + isbn + '"')
-                else:
-                    queries.append(
-                        'tit="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
+                queries.append(
+                    'tit="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
 
             # title but no author
             elif authors_v == [] and title_v != []:
-                for i in title_v:
-                    if isbn is not None:
-                        queries.append(
-                            'tit="' + i + '" AND num="' + isbn + '"')
-                    else:
-                        queries.append('tit="' + i + '"')
+                for t in title_v2:
+                    queries.append(
+                      " AND ".join(list(map(lambda x: 'tit="%s"' % x, t)))
+                    )
 
                 # try with title as author
-                if isbn is not None:
-                    queries.append('per="' + ' '.join(self.get_title_tokens(
-                        title, strip_joiners=True, strip_subtitle=True)) + '" AND num="' + isbn + '"')
-                else:
-                    queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + '"')
+                queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + '"')
 
             ## TEST: Search anything anywhere - except ISBN
             #p=[]
@@ -229,10 +226,6 @@ class DNB_DE(Source):
             #    p.append('"' + ' '.join(self.get_author_tokens(authors,only_first_author=True)) + '"')
             #q=' AND '.join(p)
             #queries.append(q)
-
-            # as last resort only use ISBN
-            if isbn is not None:
-                queries.append('num=' + isbn)
 
         # remove duplicate queries
         uniqueQueries = []
@@ -565,12 +558,6 @@ class DNB_DE(Source):
                 if isbn is not None:
                     log.info("Extracted ID ISBN: %s" % isbn)
 
-                # When doing an exact search for a given ISBN skip books with wrong ISBNs
-                if isbn is not None and "isbn" in exact_search:
-                    if isbn != exact_search["isbn"]:
-                        log.info(
-                            "Extracted ISBN does not match book's ISBN, skipping record")
-                        continue
 
                 ##### Field 82 #####
                 # ID: Sachgruppe (DDC)
