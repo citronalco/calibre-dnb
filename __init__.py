@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
@@ -10,23 +11,23 @@ from calibre.ebooks.metadata.sources.base import Source
 from calibre.ebooks.metadata import check_isbn
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.library.comments import sanitize_comments_html
-from calibre import as_unicode
+from calibre.utils.localization import lang_as_iso639_1
 
 import re
 import datetime
 
 try:
-    from urllib import quote, quote_plus # Python2
+    from urllib import quote  # Python2
 except ImportError:
-    from urllib.parse import quote, quote_plus # Python3
+    from urllib.parse import quote  # Python3
 
 from lxml import etree
 from lxml.etree import tostring
 
 try:
-    from Queue import Queue, Empty # Python2
+    from Queue import Queue, Empty  # Python2
 except ImportError:
-    from queue import Queue, Empty # Python3
+    from queue import Queue, Empty  # Python3
 
 
 class DNB_DE(Source):
@@ -36,7 +37,7 @@ class DNB_DE(Source):
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
     version = (3, 1, 0)
-    minimum_calibre_version = (0, 8, 0)
+    minimum_calibre_version = (0, 9, 33)
 
     capabilities = frozenset(['identify', 'cover'])
     touched_fields = frozenset(['title', 'authors', 'publisher', 'pubdate', 'languages', 'tags', 'identifier:urn',
@@ -91,143 +92,146 @@ class DNB_DE(Source):
 
         # build queries
         queries = []
-        # DNB does not do an exact search when searching for a idn or isbn, so we have to filter the results
-        exact_search = {}
 
-        if idn is not None:
-            exact_search['idn'] = idn
+        if idn:
             # if IDN is given only search for the IDN and skip all the other stuff
-            queries.append('num='+idn)
-
-        if isbn is not None:
+            queries.append('num=' + idn)
+        elif isbn:
             # if ISBN is given only search for the ISBN and skip all the other stuff
-            queries.append('num='+isbn)
-
+            queries.append('num=' + isbn)
         else:
-            #authors = []
-            #title = None
-            #title = re.sub('^(Der|Die|Das|Ein|Eine) ', '', title)
-
             # create some variants of given authors
             authors_v = []
             if len(authors) > 0:
-                # concat all author names ("Peter Meier Luise Stark")
-                authors_v.append(' '.join(self.get_author_tokens(
-                    authors, only_first_author=False)))
-
-                # use only first author
-                authors_v.append(' '.join(self.get_author_tokens(
-                    authors, only_first_author=True)))
+                # simply use all authors
+                for a in authors:
+                    authors_v.append(authors)
 
                 # use all authors, one by one
-                for a in authors:
-                    authors_v.append(a)
-
-                # remove duplicates
-                unique_authors_v = []
-                for i in authors_v:
-                    if i not in unique_authors_v:
-                        unique_authors_v.append(i)
-
+                if len(authors) > 1:
+                    for a in authors:
+                        authors_v.append([a])
 
             # create some variants of given title
             title_v = []
             if title is not None:
+                title_tokens = []
+
                 # simply use given title
-                title_v.append(title)
+                title_tokens.append(title)
 
                 # remove some punctation characters
-                title_v.append(' '.join(self.get_title_tokens(
+                title_tokens.append(' '.join(self.get_title_tokens(
                     title, strip_joiners=False, strip_subtitle=False)))
 
                 # remove subtitle (everything after " : ")
-                title_v.append(' '.join(self.get_title_tokens(
+                title_tokens.append(' '.join(self.get_title_tokens(
                     title, strip_joiners=False, strip_subtitle=True)))
 
                 # remove some punctation characters and joiners ("and", "&", ...)
-                title_v.append(' '.join(self.get_title_tokens(
+                title_tokens.append(' '.join(self.get_title_tokens(
                     title, strip_joiners=True, strip_subtitle=False)))
 
                 # remove subtitle (everything after " : ") and joiners ("and", "&", ...)
-                title_v.append(' '.join(self.get_title_tokens(
+                title_tokens.append(' '.join(self.get_title_tokens(
                     title, strip_joiners=True, strip_subtitle=True)))
 
                 # TODO: remove subtitle after " - "
 
-                ## TEST: remove text in braces at the end of title (if present)
+                # TEST: remove text in braces at the end of title (if present)
                 #match = re.search("^(.+?)[\s*]\(.+\)$", title)
-                #if match is not None:
+                # if match is not None:
                 #    title_v.append(' '.join(self.get_title_tokens(
                 #        match.group(1), strip_joiners=True, strip_subtitle=True)))
 
-                ## TEST: search for title parts before and after colon (if present)
+                # TEST: search for title parts before and after colon (if present)
                 #match = re.search("^(.+)\s*[\-:]\s(.+)$", title)
-                #if match is not None:
+                # if match is not None:
                 #    title_v=[]
                 #    title_v.append(' '.join(self.get_title_tokens(match.group(2),strip_joiners=True,strip_subtitle=True)))
                 #    title_v.append(' '.join(self.get_title_tokens(match.group(1),strip_joiners=True,strip_subtitle=True)))
 
                 # remove duplicates
-                unique_title_v = []
-                for i in title_v:
-                    if i not in unique_title_v:
-                        unique_title_v.append(i)
+                tmp_unique = []
+                for i in title_tokens:
+                    if i not in tmp_unique:
+                        tmp_unique.append(i)
+                title_tokens = tmp_unique
 
                 # loop through all generated title variants and split them if they contain a digit at the end ("The book of examples 02")
-                title_v2 = []
-                for i in unique_title_v:
+                for i in title_tokens:
                     match = re.search("^(.+)\s+0*(\d+)$", i)
                     if match:
-                      title_v2.append([match.group(1), match.group(2)])
+                        title_v.append([match.group(1), match.group(2)])
                     else:
-                      title_v2.append([i])
+                        title_v.append([i])
 
-            #### create queries
-            # title and author
-            if authors_v != [] and title_v2 != []:
+            # create queries
+            # Example:
+            # Book title:   The book of examples 2: Even more!
+            # Book authors: John Doe & Mustermann, Max
+
+            # title and author given:
+            if authors_v and title_v:
+
+                # try with title and all authors
+                queries.append('tst="%s" AND %s' % (
+                    title,
+                    " AND ".join(list(map(lambda x: 'per="%s"' % x, authors))),
+                ))
+
+                # try with cartiesian product of all authors and title variations created above
                 for a in authors_v:
-                     for t in title_v2:
+                    for t in title_v:
                         queries.append(
-                          " AND ".join(list(map(lambda x: 'tit="%s"' % x, t)) + [ 'per="%s"' % a ])
-                        )
+                            " AND ".join(list(map(lambda x: 'tit="%s"' % x, t)) + list(map(lambda x: 'per="%s"' % x, a))
+                                         ))
 
                 # try with first author as title and title (without subtitle) as author
-                queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)
-                                                  ) + '" AND tit="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
+                queries.append('per="%s" AND tit="%s"' % (
+                    ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
+                    ' '.join(self.get_author_tokens(authors, only_first_author=True))
+                ))
 
-                # try with author and title (without subtitle) in any index
-                queries.append('"' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)
-                                                  ) + '" AND "' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
 
-            # author but no title
-            elif authors_v != [] and title_v == []:
-                for i in authors_v:
-                    queries.append('per="' + i + '"')
-
-                # try with author as title
+                # try with first author and title (without subtitle) in any index
                 queries.append(
-                    'tit="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
+                    ' AND '.join(list(map(lambda x: '"%s"' % x, [
+                        " ".join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
+                        " ".join(self.get_author_tokens(authors, only_first_author=True))
+                    ])))
+                )
 
-            # title but no author
-            elif authors_v == [] and title_v != []:
-                for t in title_v2:
+                # try with first author and splitted title words (without subtitle) in any index
+                queries.append(
+                    ' AND '.join(list(map(lambda x: '"%s"' % x,
+                                          list(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + list(self.get_author_tokens(authors, only_first_author=True))
+                                          )))
+                )
+
+            # authors given but no title
+            elif authors_v and not title_v:
+                # try with all authors as authors
+                for a in authors_v:
+                    queries.append(" AND ".join(list(map(lambda x: 'per="%s"' % x, a))))
+
+                # try with first author as author
+                queries.append('per="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
+
+                # try with first author as title
+                queries.append('tit="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
+
+            # title given but no author
+            elif not authors_v and title_v:
+                # try with title as title
+                for t in title_v:
                     queries.append(
-                      " AND ".join(list(map(lambda x: 'tit="%s"' % x, t)))
+                        " AND ".join(list(map(lambda x: 'tit="%s"' % x, t)))
                     )
-
                 # try with title as author
                 queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + '"')
 
-            ## TEST: Search anything anywhere - except ISBN
-            #p=[]
-            #if title is not None:
-            #    p.append('"' + ' '.join(self.get_title_tokens(title,strip_joiners=True,strip_subtitle=True)) + '"')
-            #if authors != []:
-            #    p.append('"' + ' '.join(self.get_author_tokens(authors,only_first_author=True)) + '"')
-            #q=' AND '.join(p)
-            #queries.append(q)
-
-        # remove duplicate queries
+        # remove duplicate queries - Fixme: Does not remove all duplicates, only most!
         uniqueQueries = []
         for i in queries:
             if i not in uniqueQueries:
@@ -235,13 +239,12 @@ class DNB_DE(Source):
 
         # Process queries
         results = None
-
         for query in uniqueQueries:
             # SRU does not work with "+" or "?" characters in query, so we simply remove them
             query = re.sub('[\+\?]', '', query)
 
-            query = query + \
-                ' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)'
+            # do not search in films, music, microfiches or audiobooks
+            query = query + ' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)'
             log.info(query)
 
             results = self.getSearchResults(log, query, timeout)
@@ -254,522 +257,352 @@ class DNB_DE(Source):
             ns = {'marc21': 'http://www.loc.gov/MARC21/slim'}
 
             for record in results:
-                series = None
-                series_index = None
-                publisher = None
-                pubdate = None
-                languages = []
-                title = None
-                title_sort = None
-                authors = []
-                author_sort = None
-                edition = None
-                comments = None
-                idn = None
-                urn = None
-                isbn = None
-                ddc = []
-                subjects_gnd = []
-                subjects_non_gnd = []
-                publisher_name = None
-                publisher_location = None
+                book = {
+                    'series': None,
+                    'series_index': None,
+                    'publisher': None,
+                    'pubdate': None,
+                    'language': None,
+                    'languages': [],
+                    'title': None,
+                    'title_sort': None,
+                    'authors': [],
+                    'author_sort': None,
+                    'edition': None,
+                    'comments': None,
+                    'idn': None,
+                    'urn': None,
+                    'isbn': None,
+                    'ddc': [],
+                    'subjects_gnd': [],
+                    'subjects_non_gnd': [],
+                    'publisher_name': None,
+                    'publisher_location': None,
+                }
 
-                ##### Field 264 #####
-                # Publisher Name and Location
-                fields = record.xpath(
-                    "./marc21:datafield[@tag='264']/marc21:subfield[@code='b' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns)
-                if len(fields) > 0:
-                    publisher_name = fields[0].xpath(
-                        "./marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns)[0].text.strip()
-                    publisher_location = fields[0].xpath(
-                        "./marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
-                else:
-                    fields = record.xpath(
-                        "./marc21:datafield[@tag='264']/marc21:subfield[@code='b' and string-length(text())>0]/../..", namespaces=ns)
-                    if len(fields) > 0:
-                        publisher_name = fields[0].xpath(
-                            "./marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns)[0].text.strip()
-                    else:
-                        fields = record.xpath(
-                            "./marc21:datafield[@tag='264']/marc21:subfield[@code='a' and string-length(text())>0]/../..", namespaces=ns)
-                        if len(fields) > 0:
-                            publisher_location = fields[0].xpath(
-                                "./marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                ##### Field 300: "Physical Description" #####
+                # Filter out CDs
+                try:
+                    physdesc = record.xpath("./marc21:datafield[@tag='300']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                    match = re.search('Online-Ressource \(\d+ CD', physdesc)
+                    if match:
+                        return None
+                except:
+                    pass
 
-                # Publishing Date
-                for i in record.xpath("./marc21:datafield[@tag='264']/marc21:subfield[@code='c' and string-length(text())>=4]", namespaces=ns):
-                    match = re.search("(\d{4})", i.text.strip())
-                    if match is not None:
-                        year = match.group(1)
-                        pubdate = datetime.datetime(int(year), 1, 1, 12, 30, 0)
+                ##### Field 337: "Media Type" #####
+                # Filter out Audio and Video
+                try:
+                    mediatype = record.xpath("./marc21:datafield[@tag='337']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip().lower()
+                    if mediatype in ('audio', 'video'):
+                        return None
+                except:
+                    pass
+
+                ##### Field 264: "Production, Publication, Distribution, Manufacture, and Copyright Notice" #####
+                # Get Publisher Name, Publishing Location, Publishing Date
+                # Subfields:
+                # a: publishing location
+                # b: publisher name
+                # c: publishing date
+                for field in record.xpath("./marc21:datafield[@tag='264']", namespaces=ns):
+                    if book['publisher_name'] and book['publisher_location'] and book['pubdate']:
                         break
 
-                # Log
-                if publisher_name is not None:
-                    log.info("Extracted Publisher: %s" % publisher_name)
-                if publisher_location is not None:
-                    log.info("Extracted Publisher Location: %s" %
-                             publisher_location)
-                if pubdate is not None:
-                    log.info("Extracted Publication Year: %s" % pubdate)
+                    if not book['publisher_location']:
+                        try:
+                            book['publisher_location'] = field.xpath("./marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                            log.info("[264.a] Publisher Location: %s" % book['publisher_location'])
+                        except IndexError:
+                            pass
 
-                ##### Field 245 ####
-                # a = title, n = number of part, p = name of part - ok
-                # Title/Series/Series_Index
-                title_parts = []
-                for i in record.xpath("./marc21:datafield[@tag='245']/marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
+                    if not book['publisher_name']:
+                        try:
+                            book['publisher_name'] = field.xpath("./marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                            log.info("[264.b] Publisher: %s" % book['publisher_name'])
+                        except IndexError:
+                            pass
+
+                    if not book['pubdate']:
+                        try:
+                            pubdate = field.xpath("./marc21:subfield[@code='c' and string-length(text())>=4]", namespaces=ns)[0].text.strip()
+                            match = re.search("(\d{4})", pubdate)
+                            year = match.group(1)
+                            book['pubdate'] = datetime.datetime(int(year), 1, 1, 12, 30, 0)
+                            log.info("[264.c] Publication Year: %s" % book['pubdate'])
+                        except (IndexError, AttributeError):
+                            pass
+
+
+                ##### Field 245: "Title Statement" #####
+                # Get Title, Series, Series_Index, Subtitle
+                # Subfields:
+                # a: title
+                # b: subtitle 1
+                # n: number of part
+                # p: name of part
+
+                # Examples:
+                # a = "The Endless Book", n[0] = 2, p[0] = "Second Season", n[1] = 3, p[1] = "Summertime", n[2] = 4, p[2] = "The Return of Foobar"	Example: dnb-id 1008774839
+                # ->	Title:		"The Return Of Foobar"
+                #	Series:		"The Endless Book 2 - Second Season 3 - Summertime"
+                #	Series Index:	4
+
+                # a = "The Endless Book", n[0] = 2, p[0] = "Second Season", n[1] = 3, p[1] = "Summertime", n[2] = 4"
+                # ->	Title:		"Summertime 4"
+                #	Series:		"The Endless Book 2 - Second Season 3 - Summertime"
+                #	Series Index:	4
+
+                # a = "The Endless Book", n[0] = 2, p[0] = "Second Season", n[1] = 3, p[1] = "Summertime"
+                # ->	Title:		"Summertime"
+                #	Series:		"The Endless Book 2 - Second Season"
+                #	Series Index:	3
+
+                # a = "The Endless Book", n[0] = 2, p[0] = "Second Season", n[1] = 3"	Example: 956375146
+                # ->	Title:		"Second Season 3"	n=2, p =1
+                #	Series:		"The Endless Book 2 - Second Season"
+                #	Series Index:	3
+
+                # a = "The Endless Book", n[0] = 2, p[0] = "Second Season"
+                # ->	Title:		"Second Season"	n=1,p=1
+                #	Series:		"The Endless Book"
+                #	Series Index:	2
+
+                # a = "The Endless Book", n[0] = 2"
+                # ->	Title: 		"The Endless Book 2"
+                #	Series:		"The Endless Book"
+                #	Series Index:	2
+
+                for field in record.xpath("./marc21:datafield[@tag='245']", namespaces=ns):
+                    title_parts = []
+
                     code_a = []
+                    for i in field.xpath("./marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                        code_a.append(i.text.strip())
+
                     code_n = []
-                    code_p = []
-
-                    # a
-                    for j in i.xpath("./marc21:subfield[@code='a']", namespaces=ns):
-                        code_a.append(j.text.strip())
-
-                    # n
-                    for j in i.xpath("./marc21:subfield[@code='n']", namespaces=ns):
-                        match = re.search("(\d+([,\.]\d+)?)", j.text.strip())
+                    for i in field.xpath("./marc21:subfield[@code='n' and string-length(text())>0]", namespaces=ns):
+                        # looks like sometimes DNB does not know the series index and uses something like "[...]"
+                        match = re.search("(\d+([,\.]\d+)?)", i.text.strip())
                         if match:
                             code_n.append(match.group(1))
-                        else:
-                            # looks like sometimes DNB does not know the series index and uses something like "[...]"
-                            code_n.append("0")
 
-                    # p
-                    for j in i.xpath("./marc21:subfield[@code='p']", namespaces=ns):
-                        code_p.append(j.text.strip())
+                    code_p = []
+                    for i in field.xpath("./marc21:subfield[@code='p' and string-length(text())>0]", namespaces=ns):
+                        code_p.append(i.text.strip())
 
                     # Title
                     title_parts = code_a
 
-                    # Series?
-                    if len(code_a) > 0 and len(code_n) > 0:
-                        # a = "The Endless Book", n[0] = 2, p[0] = "Second Season", n[1] = 3, p[1] = "Summertime", n[2] = 4, p[2] = "The Return of Foobar"	Example: dnb-id 1008774839
-                        # ->	Title: 	"The Endless Book 2 - Second Season 3 - Summertime 4 - The Return Of Foobar"
-                        #	Series:	"The Endless Book 2 - Second Season 3 - Summertime"
-                        #	Index:	4
-
-                        # a = "The Endless Book", n[0] = 2, p[0] = "Second Season", n[1] = 3, p[1] = "Summertime", n[2] = 4"
-                        # ->	Title: 	"The Endless Book 2 - Second Season 3 - Summertime 4"
-                        #	Series:	"The Endless Book 2 - Second Season 3 - Summertime"
-                        #	Index:	4
-
-                        # a = "The Endless Book", n[0] = 2, p[0] = "Second Season", n[1] = 3, p[1] = "Summertime"
-                        # ->	Title: 	"The Endless Book 2 - Second Season 3 - Summertime"	n=2, p=2
-                        #	Series:	"The Endless Book 2 - Second Season"
-                        #	Index:	3
-
-                        # a = "The Endless Book", n[0] = 2, p[0] = "Second Season", n[1] = 3"	Example: 956375146
-                        # ->	Title: 	"The Endless Book 2 - Second Season 3"	n=2, p =1
-                        #	Series:	"The Endless Book 2 - Second Season"
-                        #	Index:	3
-
-                        # a = "The Endless Book", n[0] = 2, p[0] = "Second Season"
-                        # ->	Title: 	"The Endless Book 2 - Second Season"	n=1,p=1
-                        #	Series:	"The Endless Book"
-                        #	Index:	2
-
-                        # a = "The Endless Book", n[0] = 2"	n=1, p=0
-                        # ->	Title: 	"The Endless Book 2"
-                        #	Series:	"The Endless Book"
-                        #	Index:	2
-
-                        # build title ("Name-of-Series 123 - Name of this Book")
-                        # for i in range(0,max(len(code_n),len(code_p))):
-                        #    if i<len(code_n):
-                        #	title_parts[0] += ' ' + code_n[i]
-                        #    if i<len(code_p):
-                        #	title_parts[0] += ' - ' + code_p[i]
-
-                        # alt: build title ("Name of this Book")
-                        if len(code_p) > 0:
+                    # Looks like we have a series
+                    if code_a and code_n:
+                        # set title ("Name of this Book")
+                        if code_p:
                             title_parts = [code_p[-1]]
 
                         # build series name
                         series_parts = [code_a[0]]
-                        for i in range(0, min(len(code_p), len(code_n))-1):
+                        for i in range(0, min(len(code_p), len(code_n)) - 1):
                             series_parts.append(code_p[i])
 
-                        if len(series_parts) > 1:
-                            for i in range(0, min(len(series_parts), len(code_n)-1)):
-                                series_parts[i] += ' ' + code_n[i]
+                        for i in range(0, min(len(series_parts), len(code_n) - 1)):
+                            series_parts[i] += ' ' + code_n[i]
 
-                        series = ' - '.join(series_parts)
+                        book['series'] = ' - '.join(series_parts)
+                        log.info("[245] Series: %s" % book['series'])
+                        book['series'] = self.cleanUpSeries(log, book['series'], book['publisher_name'])
 
                         # build series index
-                        series_index = 0
-                        if len(code_n) > 0:
-                            series_index = code_n[-1]
+                        if code_n:
+                            book['series_index'] = code_n[-1]
+                            log.info("[245] Series_Index: %s" % book['series_index'])
 
-                # subtitle 1: Field 245, b
-                for i in record.xpath("./marc21:datafield[@tag='245']/marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns):
-                    title_parts.append(i.text.strip())
-                    break
+                    # subtitle 1: Field 245, Subfield b
+                    try:
+                        title_parts.append(field.xpath("./marc21:subfield[@code='b' and string-length(text())>0]", namespaces=ns)[0].text.strip())
+                    except IndexError:
+                        pass
 
-                # subtitle 2
-                # for i in record.xpath("./marc21:datafield[@tag='245']/marc21:subfield[@code='c' and string-length(text())>0]",namespaces=ns):
-                #    title = title + " / " + i.text.strip()
-                #    break
-
-                title = " : ".join(title_parts)
-
-                # Log
-                if series_index is not None:
-                    log.info("Extracted Series_Index from Field 245: %s" %
-                             series_index)
-                if series is not None:
-                    log.info("Extracted Series from Field 245: %s" % series)
-                    series = self.cleanUpSeries(log, series, publisher_name)
-                if title is not None:
-                    log.info("Extracted Title: %s" % title)
-                    title = self.cleanUpTitle(log, title)
+                    book['title'] = " : ".join(title_parts)
+                    log.info("[245] Title: %s" % book['title'])
+                    book['title'] = self.cleanUpTitle(log, book['title'])
 
                 # Title_Sort
-                if len(title_parts) > 0:
+                if title_parts:
                     title_sort_parts = list(title_parts)
 
-                    try:	# Python2
-                        title_sort_regex = re.match('^(.*?)('+unichr(152)+'.*'+unichr(156)+')?(.*?)$', title_parts[0])
-                    except:	# Python3
-                        title_sort_regex = re.match('^(.*?)('+chr(152)+'.*'+chr(156)+')?(.*?)$', title_parts[0])
+                    try:  # Python2
+                        title_sort_regex = re.match('^(.*?)(' + unichr(152) + '.*' + unichr(156) + ')?(.*?)$', title_parts[0])
+                    except:  # Python3
+                        title_sort_regex = re.match('^(.*?)(' + chr(152) + '.*' + chr(156) + ')?(.*?)$', title_parts[0])
                     sortword = title_sort_regex.group(2)
                     if sortword:
-                        title_sort_parts[0] = ''.join(filter(None, [title_sort_regex.group(1).strip(), title_sort_regex.group(3).strip(), ", "+sortword]))
-                    title_sort = " : ".join(title_sort_parts)
+                        title_sort_parts[0] = ''.join(filter(None, [title_sort_regex.group(1).strip(), title_sort_regex.group(3).strip(), ", " + sortword]))
 
-                # Log
-                if title_sort is not None:
-                    log.info("Extracted Title_Sort: %s" % title_sort)
+                    book['title_sort'] = " : ".join(title_sort_parts)
+                    log.info("[245] Title_Sort: %s" % book['title_sort'])
 
-                ##### Field 100 and Field 700 #####
-                # Authors
+
+                ##### Field 100: "Main Entry-Personal Name"  #####
+                ##### Field 700: "Added Entry-Personal Name" #####
+                # Get Authors ####
+
                 # primary authors
+                primary_authors = []
                 for i in record.xpath("./marc21:datafield[@tag='100']/marc21:subfield[@code='4' and text()='aut']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     name = re.sub(" \[.*\]$", "", i.text.strip())
-                    authors.append(name)
+                    primary_authors.append(name)
+
+                if primary_authors:
+                    book['authors'].extend(primary_authors)
+                    log.info("[100.a] Primary Authors: %s" % " & ".join(primary_authors))
+
                 # secondary authors
+                secondary_authors = []
                 for i in record.xpath("./marc21:datafield[@tag='700']/marc21:subfield[@code='4' and text()='aut']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     name = re.sub(" \[.*\]$", "", i.text.strip())
-                    authors.append(name)
-                if len(authors) == 0:  # if no "real" author was found take all persons involved
-                    # secondary authors
+                    secondary_authors.append(name)
+
+                if secondary_authors:
+                    book['authors'].extend(secondary_authors)
+                    log.info("[700.a] Secondary Authors: %s" % " & ".join(secondary_authors))
+
+                # if no "real" author was found use all involved persons as authors
+                if not book['authors']:
+                    involved_persons = []
                     for i in record.xpath("./marc21:datafield[@tag='700']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                         name = re.sub(" \[.*\]$", "", i.text.strip())
-                        authors.append(name)
-                if len(authors) > 0:
-                    author_sort = authors[0]
+                        involved_persons.append(name)
 
-                # Log
-                if len(authors) > 0:
-                    log.info("Extracted Authors: %s" % " & ".join(authors))
-                if author_sort is not None:
-                    log.info("Extracted Author_Sort: %s" % " & ".join(authors))
+                    if involved_persons:
+                        book['authors'].extend(involved_persons)
+                        log.info("[700.a] Involved Persons: %s" % " & ".join(involved_persons))
 
-                ##### Field 856 #####
-                # Comments
-                for i in record.xpath("./marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>0]", namespaces=ns):
-                    if i.text.startswith("http://deposit.dnb.de/"):
+                # Author_Sort
+                if book['authors']:
+                    book['author_sort'] = book['authors'][0]
+                    log.info("[100.a,700.a] Author_Sort: %s" % book['author_sort'])
+
+
+                ##### Field 856: "Electronic Location and Access" #####
+                # Get Comments
+                # Field contains a URL to an HTML file with the comments
+                try:
+                    url = record.xpath("./marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>21]", namespaces=ns)[0].text.strip()
+                    if url.startswith("http://deposit.dnb.de/") or url.startswith("https://deposit.dnb.de/"):
                         br = self.browser
-                        log.info('Downloading Comments from: %s' % i.text)
+                        log.info('[856.u] Trying to download Comments from: %s' % url)
                         try:
-                            comments = br.open_novisit(
-                                i.text, timeout=30).read()
+                            comments = br.open_novisit(url, timeout=30).read()
                             comments = re.sub(
                                 b'(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)*(\s|<br>|<p>|\n)*', b'', comments, flags=re.IGNORECASE)
-                            comments = sanitize_comments_html(comments)
-                            break
-                        except:
-                            log.info("Could not download Comments from %s" % i)
+                            book['comments'] = sanitize_comments_html(comments)
+                            log.info('[856.u] Got Comments: %s' % book['comments'])
+                        except Exception as e:
+                            log.info("[856.u] Could not download Comments from %s: %s" % (url, e))
+                except IndexError:
+                    pass
 
-                # Log
-                if comments is not None:
-                    log.info('Comments: %s' % comments)
-
-                # If no comments are found for this edition, look at other editions of this book (Fields 776)
-                # TODO: Make this configurable (default: yes)
-                if comments is None:
+                # If no comments are found for this edition, look at other editions of this book (Field 776: "Additional Physical Form Entry")
+                # Example: dnb-idb=1136409025
+                if not book['comments']:
                     # get all other issues
                     for i in record.xpath("./marc21:datafield[@tag='776']/marc21:subfield[@code='w' and string-length(text())>0]", namespaces=ns):
                         other_idn = re.sub("^\(.*\)", "", i.text.strip())
-                        subquery = 'num='+other_idn + \
-                            ' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)'
-                        log.info(subquery)
+                        subquery = 'num=%s NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)' % other_idn
+                        subresults = self.getSearchResults(log, subquery, timeout)
 
-                        subresults = self.getSearchResults(
-                            log, subquery, timeout)
-
-                        if subresults is None:
+                        if not subresults:
                             continue
 
+                        log.info("[776.w] Found other issue with IDN %s" % other_idn)
                         for subrecord in subresults:
-                            for i in subrecord.xpath("./marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>0]", namespaces=ns):
-                                if i.text.startswith("http://deposit.dnb.de/"):
+                            try:
+                                url = subrecord.xpath("./marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>21]", namespaces=ns)[0].text.strip()
+                                if url.startswith("http://deposit.dnb.de/") or url.startswith("https://deposit.dnb.de/"):
                                     br = self.browser
-                                    log.info(
-                                        'Downloading Comments from: %s' % i.text)
+                                    log.info('[856.u] Trying to download other issues Comments from: %s' % url)
                                     try:
-                                        comments = br.open_novisit(
-                                            i.text, timeout=30).read()
+                                        comments = br.open_novisit(url, timeout=30).read()
                                         comments = re.sub(
-                                            b'(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)?(\s|<br>|<p>|\n)*', b'', comments, flags=re.IGNORECASE)
-                                        comments = sanitize_comments_html(
-                                            comments)
+                                            b'(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)*(\s|<br>|<p>|\n)*', b'', comments, flags=re.IGNORECASE)
+                                        book['comments'] = sanitize_comments_html(comments)
+                                        log.info('[856.u] Got other issues Comments: %s' % book['comments'])
                                         break
-                                    except:
-                                        log.info(
-                                            "Could not download Comments from %s" % i)
-                            if comments is not None:
-                                log.info(
-                                    'Comments from other issue: %s' % comments)
-                                break
+                                    except Exception as e:
+                                        log.info("[856.u] Could not download other issues Comments from %s: %s" % (url, e))
+                            except IndexError:
+                                pass
 
-                ##### Field 16 #####
-                # ID: IDN
-                for i in record.xpath("./marc21:datafield[@tag='016']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                    idn = i.text.strip()
-                    break
-                # Log
-                if idn is not None:
-                    log.info("Extracted ID IDN: %s" % idn)
 
-                ##### Field 24 #####
-                # ID: URN
+                ##### Field 16: "National Bibliographic Agency Control Number" #####
+                # Get Identifier "IDN" (dnb-idn)
+                try:
+                    book['idn'] = record.xpath("./marc21:datafield[@tag='016']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                    log.info("[016.a] Identifier IDN: %s" % book['idn'])
+                except IndexError:
+                    pass
+
+
+                ##### Field 24: "Other Standard Identifier" #####
+                # Get Identifier "URN"
                 for i in record.xpath("./marc21:datafield[@tag='024']/marc21:subfield[@code='2' and text()='urn']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                    urn = i.text.strip()
-                    match = re.search("^urn:(.+)$", urn)
-                    if match:
-                         urn = match.group(1)
-                         break
+                    try:
+                        urn = i.text.strip()
+                        match = re.search("^urn:(.+)$", urn)
+                        book['urn'] = match.group(1)
+                        log.info("[024.a] Identifier URN: %s" % book['urn'])
+                        break
+                    except AttributeError:
+                        pass
 
-                # Log
-                if urn is not None:
-                    log.info("Extracted ID URN: %s" % urn)
 
-                ##### Field 20 #####
-                # ID: ISBN
+                ##### Field 20: "International Standard Book Number" #####
+                # Get Identifier "ISBN"
                 for i in record.xpath("./marc21:datafield[@tag='020']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                    isbn_regex = "(?:ISBN(?:-1[03])?:? )?(?=[-0-9 ]{17}|[-0-9X ]{13}|[0-9X]{10})(?:97[89][- ]?)?[0-9]{1,5}[- ]?(?:[0-9]+[- ]?){2}[0-9X]"
-                    match = re.search(isbn_regex, i.text.strip())
-                    isbn = match.group()
-                    isbn = isbn.replace('-', '')
-                    break
+                    try:
+                        isbn_regex = "(?:ISBN(?:-1[03])?:? )?(?=[-0-9 ]{17}|[-0-9X ]{13}|[0-9X]{10})(?:97[89][- ]?)?[0-9]{1,5}[- ]?(?:[0-9]+[- ]?){2}[0-9X]"
+                        match = re.search(isbn_regex, i.text.strip())
+                        isbn = match.group()
+                        book['isbn'] = isbn.replace('-', '')
+                        log.info("[020.a] Identifier ISBN: %s" % book['isbn'])
+                        break
+                    except AttributeError:
+                        pass
 
-                # Log
-                if isbn is not None:
-                    log.info("Extracted ID ISBN: %s" % isbn)
 
-
-                ##### Field 82 #####
-                # ID: Sachgruppe (DDC)
+                ##### Field 82: "Dewey Decimal Classification Number" #####
+                # Get Identifier "Sachgruppen (DDC)" (ddc)
                 for i in record.xpath("./marc21:datafield[@tag='082']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                    ddc.append(i.text.strip())
+                    book['ddc'].append(i.text.strip())
+                if book['ddc']:
+                    log.info("[082.a] Indentifiers DDC: %s" % ",".join(book['ddc']))
 
-                # Log
-                if len(ddc) > 0:
-                    log.info("Extracted ID DDC: %s" % ",".join(ddc))
 
-                ##### Field 490 #####
-                # In theory this field is not used for "real" book series, use field 830 instead. But it is used.
-                # Series and Series_Index
-                if series is None or (series is not None and series_index == "0"):
-                    for i in record.xpath("./marc21:datafield[@tag='490']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
-                        # "v" either "Nr. 220" or "This great Seriestitle : Nr. 220" - if available use this instead of attribute a
-                        attr_v = i.xpath(
-                            "./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
-                        parts = re.split(" : ", attr_v)
-                        if len(parts) == 2:
-                            if bool(re.search("\d", parts[0])) != bool(re.search("\d", parts[1])):
-                                # figure out which part contains the index
-                                if bool(re.search("\d", parts[0])):
-                                    indexpart = parts[0]
-                                    textpart = parts[1]
-                                else:
-                                    indexpart = parts[1]
-                                    textpart = parts[0]
+                # Field 490: "Series Statement"
+                # Get Series and Series_Index
+                # In theory book series are in field 830, but sometimes they are in 490, 246, 800 or nowhere
+                # So let's look here if we could not extract series/series_index from 830 above properly
+                # Subfields:
+                # v: Series name and index
+                # a: Series name
+                for i in record.xpath("./marc21:datafield[@tag='490']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
 
-                                match = re.search("(\d+[,\.\d+]?)", indexpart)
-                                if match is not None:
-                                    series_index = match.group(1)
-                                    series = textpart.strip()
+                    if book['series'] and book['series_index'] and book['series_index'] != "0":
+                        break
 
-                        else:
-                            match = re.search("(\d+[,\.\d+]?)", attr_v)
-                            if match is not None:
-                                series_index = match.group(1)
-                            else:
-                                series_index = "0"
+                    series = None
+                    series_index = None
 
-                        if series_index is not None:
-                            series_index = series_index.replace(',', '.')
+                    # "v" is either "Nr. 220" or "This great Seriestitle : Nr. 220"
+                    attr_v = i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
 
-                        # Use Series Name from attribute "a" if not already found in attribute "v"
-                        if series is None:
-                            series = i.xpath(
-                                "./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
-
-                        # Log
-                        if series_index is not None:
-                            log.info(
-                                "Extracted Series Index from Field 490: %s" % series_index)
-                        if series is not None:
-                            log.info(
-                                "Extracted Series from Field 490: %s" % series)
-                            series = self.cleanUpSeries(
-                                log, series, publisher_name)
-                        if series is not None:
-                            break
-
-                ##### Field 246 #####
-                # Series and Series_Index
-                if series is None or (series is not None and series_index == "0"):
-                    for i in record.xpath("./marc21:datafield[@tag='246']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                        match = re.search(
-                            "^(.+?) ; (\d+[,\.\d+]?)$", i.text.strip())
-                        if match is not None:
-                            series = match.group(1)
-                            series_index = match.group(2)
-
-                            # Log
-                            if series_index is not None:
-                                log.info(
-                                    "Extracted Series Index from Field 246: %s" % series_index)
-                            if series is not None:
-                                log.info(
-                                    "Extracted Series from Field 246: %s" % series)
-                                series = self.cleanUpSeries(
-                                    log, series, publisher_name)
-                            if series is not None:
-                                break
-
-                ##### Field 800 #####
-                # Series and Series_Index
-                if series is None or (series is not None and series_index == "0"):
-                    for i in record.xpath("./marc21:datafield[@tag='800']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='t' and string-length(text())>0]/..", namespaces=ns):
-                        # Series Index
-                        series_index = i.xpath(
-                            "./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
-                        match = re.search("(\d+[,\.\d+]?)", series_index)
-                        if match is not None:
-                            series_index = match.group(1)
-                        else:
-                            series_index = "0"
-                        series_index = series_index.replace(',', '.')
-                        # Series
-                        series = i.xpath(
-                            "./marc21:subfield[@code='t']", namespaces=ns)[0].text.strip()
-
-                        # Log
-                        if series_index is not None:
-                            log.info(
-                                "Extracted Series Index from Field 800: %s" % series_index)
-                        if series is not None:
-                            log.info(
-                                "Extracted Series from Field 800: %s" % series)
-                            series = self.cleanUpSeries(
-                                log, series, publisher_name)
-                        if series is not None:
-                            break
-
-                ##### Field 830 #####
-                # Series and Series_Index
-                if series is None or (series is not None and series_index == "0"):
-                    for i in record.xpath("./marc21:datafield[@tag='830']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
-                        # Series Index
-                        series_index = i.xpath(
-                            "./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
-                        match = re.search("(\d+[,\.\d+]?)", series_index)
-                        if match is not None:
-                            series_index = match.group(1)
-                        else:
-                            series_index = "0"
-                        series_index = series_index.replace(',', '.')
-                        # Series
-                        series = i.xpath(
-                            "./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
-
-                        # Log
-                        if series_index is not None:
-                            log.info(
-                                "Extracted Series Index from Field 830: %s" % series_index)
-                        if series is not None:
-                            log.info(
-                                "Extracted Series from Field 830: %s" % series)
-                            series = self.cleanUpSeries(
-                                log, series, publisher_name)
-                        if series is not None:
-                            break
-
-                ##### Field 689 #####
-                # GND Subjects
-                for i in record.xpath("./marc21:datafield[@tag='689']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                    subjects_gnd.append(i.text.strip())
-                for f in range(600, 656):
-                    for i in record.xpath("./marc21:datafield[@tag='"+str(f)+"']/marc21:subfield[@code='2' and text()='gnd']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                        if i.text.startswith("("):
-                            continue
-                        subjects_gnd.append(i.text)
-
-                # Log
-                if len(subjects_gnd) > 0:
-                    log.info("Extracted GND Subjects: %s" %
-                             " ".join(subjects_gnd))
-
-                ##### Fields 600-655 #####
-                # TODO: Remove sorting characters
-                # Non-GND subjects
-                for f in range(600, 656):
-                    for i in record.xpath("./marc21:datafield[@tag='"+str(f)+"']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                        # ignore entries starting with "(":
-                        if i.text.startswith("("):
-                            continue
-                        subjects_non_gnd.extend(re.split(',|;', i.text))
-                # remove one-character subjects:
-                for i in subjects_non_gnd:
-                    if len(i) < 2:
-                        subjects_non_gnd.remove(i)
-
-                # Log
-                if len(subjects_non_gnd) > 0:
-                    log.info("Extracted non-GND Subjects: %s" %
-                             " ".join(subjects_non_gnd))
-
-                ##### Field 250 #####
-                # Edition
-                for i in record.xpath("./marc21:datafield[@tag='250']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                    edition = i.text.strip()
-                    break
-
-                # Log
-                if edition is not None:
-                    log.info("Extracted Edition: %s" % edition)
-
-                ##### Field 41 #####
-                # Languages
-                for i in record.xpath("./marc21:datafield[@tag='041']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                    languages.append(i.text.strip())
-
-                # Log
-                if languages is not None:
-                    log.info("Extracted Languages: %s" % ",".join(languages))
-
-                ##### If configured: Try to separate Series, Series Index and Title from the fetched title #####
-                # if self.cfg_guess_series is True:
-                if (series is None or (series is not None and series_index == "0")) and self.cfg_guess_series is True:
-                    guessed_series = None
-                    guessed_series_index = None
-                    guessed_title = None
-
-                    log.info("Starting Series Guesser")
-
-                    parts = re.split(
-                        "[:]", self.removeSortingCharacters(title))
-
+                    # Assume we have "This great Seriestitle : Nr. 220"
+                    # -> Split at " : ", the part without digit is the series, the digits in the other part are the series_index
+                    parts = re.split(" : ", attr_v)
                     if len(parts) == 2:
-                        log.info("Title has two parts")
-                        # make sure only one part of the two parts contains digits
                         if bool(re.search("\d", parts[0])) != bool(re.search("\d", parts[1])):
-                            log.info("only one title part contains digits")
-                            # figure out which part contains the index
+                            # figure out which part contains the index number
                             if bool(re.search("\d", parts[0])):
                                 indexpart = parts[0]
                                 textpart = parts[1]
@@ -777,195 +610,346 @@ class DNB_DE(Source):
                                 indexpart = parts[1]
                                 textpart = parts[0]
 
-                            # Look at the part without digits:
-                            # remove odd characters from start and end of the text part
+                            match = re.search("(\d+[,\.\d+]?)", indexpart)
+                            if match:
+                                series_index = match.group(1)
+                                series = textpart.strip()
+                                log.info("[490.v] Series: %s" % series)
+                                log.info("[490.v] Series_Index: %s" % series_index)
+
+                    else:
+                        # Assumption above was wrong. Try to extract at least the series_index
+                        match = re.search("(\d+[,\.\d+]?)", attr_v)
+                        if match:
+                            series_index = match.group(1)
+                            log.info("[490.v] Series_Index: %s" % series_index)
+
+                    # Use Series Name from attribute "a" if not already found in attribute "v"
+                    if not series:
+                        series = i.xpath("./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
+                        log.info("[490.a] Series: %s" % book['series'])
+
+                    if series:
+                        book['series'] = series
+                        book['series'] = self.cleanUpSeries(log, book['series'], book['publisher_name'])
+                    if series_index:
+                        book['series_index'] = series_index
+
+
+                ##### Field 246: "Varying Form of Title" #####
+                # Series and Series_Index
+                for i in record.xpath("./marc21:datafield[@tag='246']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+
+                    if book['series'] and book['series_index'] and book['series_index'] != "0":
+                        break
+
+                    match = re.search("^(.+?) ; (\d+[,\.\d+]?)$", i.text.strip())
+
+                    if match:
+                        book['series'] = match.group(1)
+                        log.info("[246.a] Series: %s" % book['series'])
+                        book['series'] = self.cleanUpSeries(log, book['series'], book['publisher_name'])
+
+                        book['series_index'] = match.group(2)
+                        log.info("[246.a] Series_Index: %s" % book['series_index'])
+
+
+                ##### Field 800: "Series Added Entry-Personal Name" #####
+                # Series and Series_Index
+                for i in record.xpath("./marc21:datafield[@tag='800']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='t' and string-length(text())>0]/..", namespaces=ns):
+
+                    if book['series'] and book['series_index'] and book['series_index'] != "0":
+                        break
+
+                    # Series Index
+                    match = re.search("(\d+[,\.\d+]?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
+                    if match:
+                        book['series_index'] = match.group(1)
+                        log.info("[800.v] Series_Index: %s" % book['series_index'])
+
+                    # Series
+                    book['series'] = i.xpath("./marc21:subfield[@code='t']", namespaces=ns)[0].text.strip()
+                    log.info("[800.t] Series: %s" % book['series'])
+                    book['series'] = self.cleanUpSeries(log, book['series'], book['publisher_name'])
+
+
+                ##### Field 830: "Series Added Entry-Uniform Title" #####
+                # Series and Series_Index
+                for i in record.xpath("./marc21:datafield[@tag='830']/marc21:subfield[@code='v' and string-length(text())>0]/../marc21:subfield[@code='a' and string-length(text())>0]/..", namespaces=ns):
+
+                    if book['series'] and book['series_index'] and book['series_index'] != "0":
+                        break
+
+                    # Series Index
+                    match = re.search("(\d+[,\.\d+]?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
+                    if match:
+                        book['series_index'] = match.group(1)
+                        log.info("[830.v] Series_Index: %s" % book['series_index'])
+
+                    # Series
+                    book['series'] = i.xpath("./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
+                    log.info("[830.a] Series: %s" % book['series'])
+                    book['series'] = self.cleanUpSeries(log, book['series'], book['publisher_name'])
+
+
+                ##### Field 689 #####
+                # Get GND Subjects
+                for i in record.xpath("./marc21:datafield[@tag='689']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                    book['subjects_gnd'].append(i.text.strip())
+
+                for f in range(600, 656):
+                    for i in record.xpath("./marc21:datafield[@tag='" + str(f) + "']/marc21:subfield[@code='2' and text()='gnd']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                        # skip entries starting with "(":
+                        if i.text.startswith("("):
+                            continue
+                        book['subjects_gnd'].append(i.text)
+
+                if book['subjects_gnd']:
+                    log.info("[689.a] GND Subjects: %s" % " ".join(book['subjects_gnd']))
+
+
+                ##### Fields 600-655 #####
+                # Get non-GND Subjects
+                for f in range(600, 656):
+                    for i in record.xpath("./marc21:datafield[@tag='" + str(f) + "']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                        # skip entries starting with "(":
+                        if i.text.startswith("("):
+                            continue
+                        # skip one-character subjects:
+                        if len(i) < 2:
+                            continue
+
+                        book['subjects_non_gnd'].extend(re.split(',|;', self.removeSortingCharacters(i.text)))
+
+                if book['subjects_non_gnd']:
+                    log.info("[600.a-655.a] Non-GND Subjects: %s" % " ".join(book['subjects_non_gnd']))
+
+
+                ##### Field 250: "Edition Statement" #####
+                # Get Edition
+                try:
+                    book['edition'] = record.xpath("./marc21:datafield[@tag='250']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                    log.info("[250.a] Edition: %s" % book['edition'])
+                except IndexError:
+                    pass
+
+
+                ##### Field 41: "Language Code" #####
+                # Get Languages (unfortunately in ISO-639-2/B ("ger" for German), while Calibre uses ISO-639-1 ("de"))
+                for i in record.xpath("./marc21:datafield[@tag='041']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                    book['languages'].append(
+                        lang_as_iso639_1(
+                            self.iso639_2b_as_iso639_3(i.text.strip())
+                        )
+                    )
+
+                if book['languages']:
+                    log.info("[041.a] Languages: %s" % ",".join(book['languages']))
+
+
+                ##### SERIES GUESSER #####
+                # DNB's metadata often lacks proper series/series_index data
+                ##### If configured: Try to retrieve Series, Series Index and "real" Title from the fetched Title #####
+                if self.cfg_guess_series is True and not book['series'] or not book['series_index'] or book['series_index'] == "0":
+                    guessed_series = None
+                    guessed_series_index = None
+                    guessed_title = None
+
+                    parts = re.split(
+                        "[:]", self.removeSortingCharacters(book['title']))
+
+                    if len(parts) == 2:
+                        # make sure only one part of the two parts contains digits
+                        if bool(re.search("\d", parts[0])) != bool(re.search("\d", parts[1])):
+
+                            # call the part with the digits "indexpart" as it contains the series_index, the one without digits "textpart"
+                            if bool(re.search("\d", parts[0])):
+                                indexpart = parts[0]
+                                textpart = parts[1]
+                            else:
+                                indexpart = parts[1]
+                                textpart = parts[0]
+
+                            # remove odd characters from start and end of the textpart
                             match = re.match(
-                                "^[\s\-–:]*(.+?)[\s\-–:]*$", textpart)
+                                "^[\s\-–—:]*(.+?)[\s\-–—:]*$", textpart)
                             if match:
                                 textpart = match.group(1)
 
-                            # Look at the part with digits:
-                            # for Titleparts like: "Name of the series - Episode 2"
+                            # if indexparts looks like "Name of the series - Episode 2": extract series and series_index
                             match = re.match(
-                                "^\s*(\S\D*?[a-zA-Z]\D*?)\W[\(\/\.,\s\-–:]*(?:#|Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$", indexpart)
+                                "^\s*(\S\D*?[a-zA-Z]\D*?)\W[\(\/\.,\s\-–—:]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?|Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", indexpart)
                             if match:
                                 guessed_series_index = match.group(2)
                                 guessed_series = match.group(1)
-                                if guessed_series is None:
+
+                                # sometimes books with multiple volumes are detected as series without series name -> Add the volume to the title if no series was found
+                                if not guessed_series:
                                     guessed_series = textpart
                                     guessed_title = textpart + " : Band " + guessed_series_index
                                 else:
                                     guessed_title = textpart
 
-                                #log.info("ALGO1: guessed_title: " + guessed_title)
-                                #log.info("ALGO1: guessed_series: " + guessed_series)
-                                #log.info("ALGO1: guessed_series_index: " + guessed_series_index)
+                                log.info("[Series Guesser] 2P1 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
 
                             else:
-                                # for Titleparts like: "Episode 2 Name of the series"
+                                # if indexpart looks like "Episode 2 Name of the series": extract series and series_index
                                 match = re.match(
-                                    "^\s*(?:#|Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*(\S\D*?[a-zA-Z]\D*?)[\/\.,\-–\s]*$", indexpart)
+                                    "^\s*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*(\S\D*?[a-zA-Z]\D*?)[\/\.,\-–—\s]*$", indexpart)
                                 if match:
                                     guessed_series_index = match.group(1)
                                     guessed_series = match.group(2)
 
-                                    if guessed_series is None:
-                                        # sometimes books with multiple volumes are detected as series without name -> Add the volume to the title
+                                    # sometimes books with multiple volumes are detected as series without series name -> Add the volume to the title if no series was found
+                                    if not guessed_series:
                                         guessed_series = textpart
                                         guessed_title = textpart + " : Band " + guessed_series_index
                                     else:
                                         guessed_title = textpart
 
-                                    #log.info("ALGO2: guessed_title: " + guessed_title)
-                                    #log.info("ALGO2: guessed_series: " + guessed_series)
-                                    #log.info("ALGO2: guessed_series_index: " + guessed_series_index)
+                                    log.info("[Series Guesser] 2P2 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
 
                                 else:
-                                    # for titleparts like: "Band 2"
+                                    # if indexpart looks like "Band 2": extract series_index
                                     match = re.match(
-                                        "^[\s\(]*(?:#|Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*[\/\.,\-–\s]*$", indexpart)
+                                        "^[\s\(]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*[\/\.,\-–—\s]*$", indexpart)
                                     if match:
                                         guessed_series_index = match.group(1)
-                                        # ...with textpart like NAME OF SERIES\s[\-\.;:]\sNAME OF TITLE
-                                        # some false positives
+
+                                        # if textpart looks like "Name of the Series - Book Title": extract series and title
                                         match = re.match(
                                             "^\s*(\w+.+?)\s?[\.;\-–:]+\s(\w+.+)\s*$", textpart)
                                         if match:
                                             guessed_series = match.group(1)
                                             guessed_title = match.group(2)
 
-                                            log.info(
-                                                "ALGO3: guessed_title: " + guessed_title)
-                                            log.info(
-                                                "ALGO3: guessed_series: " + guessed_series)
-                                            log.info(
-                                                "ALGO3: guessed_series_index: " + guessed_series_index)
+                                            log.info("[Series Guesser 2P3] matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
 
                     elif len(parts) == 1:
-                        log.info("Title has one part")
-                        # for Titles like: "Name of the series - Title (Episode 2)"
+                        # if title looks like: "Name of the series - Title (Episode 2)"
                         match = re.match(
-                            "^\s*(\S.+?) \- (\S.+?) [\(\/\.,\s\-–:](?:#|Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$", parts[0])
+                            "^\s*(\S.+?) \- (\S.+?) [\(\/\.,\s\-–:](?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", parts[0])
                         if match:
                             guessed_series_index = match.group(3)
                             guessed_series = match.group(1)
                             guessed_title = match.group(2)
 
-                            #log.info("ALGO4: guessed_title: " + guessed_title)
-                            #log.info("ALGO4: guessed_series: " + guessed_series)
-                            #log.info("ALGO4: guessed_series_index: " + guessed_series_index)
+                            log.info("[Series Guesser] 1P1 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
 
                         else:
-                            # for Titles like: "Name of the series - Episode 2"
+                            # if title looks like "Name of the series - Episode 2"
                             match = re.match(
-                                "^\s*(\S.+?)[\(\/\.,\s\-–:]*(?:#|Nr\.|Episode|Bd\.|Sammelband|[B|b]and|Part|Teil|Folge)[,\-–:\s#\(]*(\d+\.?\d*)[\)\s\-–:]*$", parts[0])
+                                "^\s*(\S.+?)[\(\/\.,\s\-–—:]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", parts[0])
                             if match:
                                 guessed_series_index = match.group(2)
                                 guessed_series = match.group(1)
                                 guessed_title = guessed_series + " : Band " + guessed_series_index
 
-                                #log.info("ALGO5: guessed_title: " + guessed_title)
-                                #log.info("ALGO5: guessed_series: " + guessed_series)
-                                #log.info("ALGO5: guessed_series_index: " + guessed_series_index)
+                                log.info("[Series Guesser] 1P2 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
 
-                    # Log
-                    if guessed_series is not None:
-                        log.info("Guessed Series: %s" % guessed_series)
-                        #guessed_series = self.cleanUpSeries(log, guessed_series, publisher_name)
-                    if guessed_series_index is not None:
-                        log.info("Guessed Series Index: %s" %
-                                 guessed_series_index)
-                    if guessed_title is not None:
-                        log.info("Guessed Title: %s" % guessed_title)
-                        guessed_title = self.cleanUpTitle(log, guessed_title)
+                    # store results
+                    if guessed_series and guessed_series_index and guessed_title:
+                        book['title'] = self.cleanUpTitle(log, guessed_title)
+                        book['series'] = guessed_series
+                        book['series_index'] = guessed_series_index
 
-                    if guessed_series is not None and guessed_series_index is not None and guessed_title is not None:
-                        title = guessed_title
-                        series = guessed_series
-                        series_index = guessed_series_index
 
                 ##### Filter exact searches #####
-                # When doing an exact search for a given IDN skip books with wrong IDNs
-                # TODO: Currently exact_search for ISBN is not implemented. Would require ISBN-10 and ISBN-13 conversions
-                if idn is not None and "idn" in exact_search:
-                    if idn != exact_search["idn"]:
-                        log.info(
-                            "Extracted IDN does not match book's IDN, skipping record")
-                        continue
+                if idn and book['idn'] and idn != book['idn']:
+                    log.info("Extracted IDN does not match book's IDN, skipping record")
+                    continue
+
 
                 ##### Put it all together #####
-                if self.cfg_append_edition_to_title == True and edition is not None:
-                    title = title + " : " + edition
+                if self.cfg_append_edition_to_title == True and book['edition']:
+                    book['title'] = book['title'] + " : " + book['edition']
 
-                mi = Metadata(self.removeSortingCharacters(title), list(map(
-                    lambda i: self.removeSortingCharacters(i), authors)))
-                mi.title_sort = self.removeSortingCharacters(title_sort)
-                mi.author_sort = self.removeSortingCharacters(author_sort)
-                mi.languages = languages
-                mi.pubdate = pubdate
+                mi = Metadata(
+                    self.removeSortingCharacters(book['title']),
+                    list(map(lambda i: self.removeSortingCharacters(i), book['authors']))
+                )
+                mi.title_sort = self.removeSortingCharacters(book['title_sort'])
+                mi.author_sort = self.removeSortingCharacters(book['author_sort'])
+
+                if book['languages']:
+                    mi.languages = book['languages']
+                    mi.language = book['languages'][0]
+
+                mi.pubdate = book['pubdate']
                 mi.publisher = " ; ".join(filter(
-                    None, [publisher_location, self.removeSortingCharacters(publisher_name)]))
-                if series_index is not None and float(series_index) < 3000:
-                    mi.series = self.removeSortingCharacters(series)
-                    mi.series_index = series_index
-                mi.comments = comments
-                mi.isbn = isbn  # also required for cover download
-                mi.set_identifier('urn', urn)
-                mi.set_identifier('dnb-idn', idn)
-                mi.set_identifier('ddc', ",".join(ddc))
+                    None, [book['publisher_location'], self.removeSortingCharacters(book['publisher_name'])]))
+
+                if book['series']:
+                    mi.series = self.removeSortingCharacters(book['series'].replace(',', '.'))
+                    mi.series_index = book['series_index'] or "0"
+
+                mi.comments = book['comments']
+
+                mi.isbn = book['isbn']  # also required for cover download
+                mi.set_identifier('urn', book['urn'])
+                mi.set_identifier('dnb-idn', book['idn'])
+                mi.set_identifier('ddc', ",".join(book['ddc']))
 
                 # cfg_subjects:
                 # 0: use only subjects_gnd
                 if self.cfg_fetch_subjects == 0:
-                    mi.tags = self.uniq(subjects_gnd)
+                    mi.tags = self.uniq(book['subjects_gnd'])
                 # 1: use only subjects_gnd if found, else subjects_non_gnd
                 elif self.cfg_fetch_subjects == 1:
-                    if len(subjects_gnd) > 0:
-                        mi.tags = self.uniq(subjects_gnd)
+                    if len(book['subjects_gnd']) > 0:
+                        mi.tags = self.uniq(book['subjects_gnd'])
                     else:
-                        mi.tags = self.uniq(subjects_non_gnd)
+                        mi.tags = self.uniq(book['subjects_non_gnd'])
                 # 2: subjects_gnd and subjects_non_gnd
                 elif self.cfg_fetch_subjects == 2:
-                    mi.tags = self.uniq(subjects_gnd + subjects_non_gnd)
+                    mi.tags = self.uniq(book['subjects_gnd'] + book['subjects_non_gnd'])
                 # 3: use only subjects_non_gnd if found, else subjects_gnd
                 elif self.cfg_fetch_subjects == 3:
-                    if len(subjects_non_gnd) > 0:
-                        mi.tags = self.uniq(subjects_non_gnd)
+                    if len(book['subjects_non_gnd']) > 0:
+                        mi.tags = self.uniq(book['subjects_non_gnd'])
                     else:
-                        mi.tags = self.uniq(subjects_gnd)
+                        mi.tags = self.uniq(book['subjects_gnd'])
                 # 4: use only subjects_non_gnd
                 elif self.cfg_fetch_subjects == 4:
-                    mi.tags = self.uniq(subjects_non_gnd)
+                    mi.tags = self.uniq(book['subjects_non_gnd'])
                 # 5: use no subjects at all
                 elif self.cfg_fetch_subjects == 5:
                     mi.tags = []
 
                 # put current result's metdata into result queue
-                log.info("Final formatted result: \n%s" % mi)
+                log.info("Final formatted result: \n%s\n-----" % mi)
                 result_queue.put(mi)
 
+            # Stop on first successful query
+            if results:
+                break
+
+    # remove sorting word markers
     def removeSortingCharacters(self, text):
-        if text is not None:
-            # remove sorting word markers
+        if text:
             return ''.join([c for c in text if ord(c) != 152 and ord(c) != 156])
         else:
             return None
 
+
+    # clean up title
     def cleanUpTitle(self, log, title):
-        if title is not None:
+        if title:
+            # remove name of translator from title
             match = re.search(
                 '^(.+) [/:] [Aa]us dem .+? von(\s\w+)+$', self.removeSortingCharacters(title))
             if match:
                 title = match.group(1)
-                log.info("Cleaning up title: %s" % title)
+                log.info("[Title Cleaning] Removed translator, title is now: %s" % title)
         return title
 
+
+    # clean up series
     def cleanUpSeries(self, log, series, publisher_name):
-        if series is not None:
+        if series:
             # series must at least contain a single character or digit
             match = re.search('[\w\d]', series)
             if not match:
-                #log.info("Series must at least contain a single character or digit, ignoring")
                 return None
 
             # remove sorting word markers
@@ -973,10 +957,9 @@ class DNB_DE(Source):
                 [c for c in series if ord(c) != 152 and ord(c) != 156])
 
             # do not accept publisher name as series
-            if publisher_name is not None:
+            if publisher_name:
                 if publisher_name == series:
-
-                    log.info("Series is equal to publisher name, ignoring")
+                    log.info("[Series Cleaning] Series %s is equal to publisher, ignoring" % series)
                     return None
 
                 # Skip series info if it starts with the first word of the publisher's name (which must be at least 4 characters long)
@@ -984,8 +967,8 @@ class DNB_DE(Source):
                     '^(\w\w\w\w+)', self.removeSortingCharacters(publisher_name))
                 if match:
                     pubcompany = match.group(1)
-                    if re.search('^'+pubcompany, series, flags=re.IGNORECASE):
-                        log.info("Series starts with publisher name, ignoring")
+                    if re.search('^\W*' + pubcompany, series, flags=re.IGNORECASE):
+                        log.info("[Series Cleaning] Series %s starts with publisher, ignoring" % series)
                         return None
 
             # do not accept some other unwanted series names
@@ -996,12 +979,14 @@ class DNB_DE(Source):
                 '^Oettinger-Taschenbuch$', '^Haymon-Taschenbuch$', '^Mira Taschenbuch$', '^Suhrkamp-Taschenbuch$', '^Bastei-L', '^Hey$', '^btb$', '^bt-Kinder', '^Ravensburger',
                 '^Sammlung Luchterhand$', '^blanvalet$', '^KiWi$', '^Piper$', '^C.H. Beck', '^Rororo', '^Goldmann$', '^Moewig$', '^Fischer Klassik$', '^hey! shorties$', '^Ullstein',
                 '^Unionsverlag', '^Ariadne-Krimi', '^C.-Bertelsmann', '^Phantastische Bibliothek$', '^Beck Paperback$', '^Beck\'sche Reihe$', '^Knaur', '^Volk-und-Welt',
-                    '^Allgemeine', '^Horror-Bibliothek$']:
+                    '^Allgemeine', '^Premium', '^Horror-Bibliothek$']:
                 if re.search(i, series, flags=re.IGNORECASE):
-                    log.info("Series contains unwanted string %s, ignoring" % i)
+                    log.info("[Series Cleaning] Series %s contains unwanted string %s, ignoring" % (series, i))
                     return None
         return series
 
+
+    # remove duplicates from list
     def uniq(self, listWithDuplicates):
         uniqueList = []
         if len(listWithDuplicates) > 0:
@@ -1009,6 +994,7 @@ class DNB_DE(Source):
                 if i not in uniqueList:
                     uniqueList.append(i)
         return uniqueList
+
 
     def getSearchResults(self, log, query, timeout=30):
         log.info('Querying: %s' % query)
@@ -1035,9 +1021,9 @@ class DNB_DE(Source):
             try:
                 diag = ": ".join([
                     xmlData.find('diagnostics/diag:diagnostic/diag:details', namespaces={
-                              None: 'http://www.loc.gov/zing/srw/', 'diag': 'http://www.loc.gov/zing/srw/diagnostic/'}).text,
+                        None: 'http://www.loc.gov/zing/srw/', 'diag': 'http://www.loc.gov/zing/srw/diagnostic/'}).text,
                     xmlData.find('diagnostics/diag:diagnostic/diag:message', namespaces={
-                              None: 'http://www.loc.gov/zing/srw/', 'diag': 'http://www.loc.gov/zing/srw/diagnostic/'}).text
+                        None: 'http://www.loc.gov/zing/srw/', 'diag': 'http://www.loc.gov/zing/srw/diagnostic/'}).text
                 ])
                 log.error('ERROR: %s' % diag)
                 return None
@@ -1045,6 +1031,8 @@ class DNB_DE(Source):
                 log.error('ERROR: Got no valid response.')
                 return None
 
+
+    # Build Cover URL
     def get_cached_cover_url(self, identifiers):
         url = None
         isbn = check_isbn(identifiers.get('isbn', None))
@@ -1053,9 +1041,11 @@ class DNB_DE(Source):
         url = self.COVERURL % isbn
         return url
 
+
+    # Download Cover image
     def download_cover(self, log, result_queue, abort, title=None, authors=None, identifiers={}, timeout=30, get_best_cover=False):
         cached_url = self.get_cached_cover_url(identifiers)
-        if cached_url is None:
+        if not cached_url:
             log.info('No cached cover found, running identify')
             rq = Queue()
             self.identify(log, rq, abort, title=title,
@@ -1072,22 +1062,54 @@ class DNB_DE(Source):
                     title=title, authors=authors, identifiers=identifiers))
                 for mi in results:
                     cached_url = self.get_cached_cover_url(mi.identifiers)
-                    if cached_url is not None:
+                    if cached_url:
                         break
 
-        if cached_url is None:
+        if not cached_url:
             log.info('No cover found')
             return None
 
         if abort.is_set():
             return
+
         br = self.browser
         log('Downloading cover from:', cached_url)
         try:
             cdata = br.open_novisit(cached_url, timeout=timeout).read()
             result_queue.put((self, cdata))
-        except:
-            log.info("Could not download Cover")
+        except Exception as e:
+            log.info("Could not download Cover, ERROR %s" % e)
+
+
+    # Convert ISO 639-2/B to ISO 639-3
+    def iso639_2b_as_iso639_3(self, lang):
+        # most codes in ISO 639-2/B are the same as in ISO 639-3. This are exceptions:
+        mapping = {
+            'alb': 'sqi',
+            'arm': 'hye',
+            'baq': 'eus',
+            'bur': 'mya',
+            'chi': 'zho',
+            'cze': 'ces',
+            'dut': 'nld',
+            'fre': 'fra',
+            'geo': 'kat',
+            'ger': 'deu',
+            'gre': 'ell',
+            'ice': 'isl',
+            'mac': 'mkd',
+            'may': 'msa',
+            'mao': 'mri',
+            'per': 'fas',
+            'rum': 'ron',
+            'slo': 'slk',
+            'tib': 'bod',
+            'wel': 'cym',
+        }
+        try:
+            return mapping[lang.lower()]
+        except KeyError:
+            return lang
 
 
 if __name__ == '__main__':  # tests
