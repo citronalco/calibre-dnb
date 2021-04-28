@@ -36,7 +36,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 1, 0)
+    version = (3, 1, 1)
     minimum_calibre_version = (0, 9, 33)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -115,26 +115,24 @@ class DNB_DE(Source):
             # create some variants of given title
             title_v = []
             if title:
-                title_tokens = []
-
                 # simply use given title
-                title_tokens.append(title)
+                title_v.append([ title ])
 
                 # remove some punctation characters
-                title_tokens.append(' '.join(self.get_title_tokens(
-                    title, strip_joiners=False, strip_subtitle=False)))
+                title_v.append([ ' '.join(self.get_title_tokens(
+                    title, strip_joiners=False, strip_subtitle=False))] )
 
                 # remove subtitle (everything after " : ")
-                title_tokens.append(' '.join(self.get_title_tokens(
-                    title, strip_joiners=False, strip_subtitle=True)))
+                title_v.append([ ' '.join(self.get_title_tokens(
+                    title, strip_joiners=False, strip_subtitle=True))] )
 
-                # remove some punctation characters and joiners ("and", "&", ...)
-                title_tokens.append(' '.join(self.get_title_tokens(
-                    title, strip_joiners=True, strip_subtitle=False)))
+                # remove some punctation characters and joiners ("and", "und", "&", ...)
+                title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
+                    title, strip_joiners=True, strip_subtitle=False))])
 
-                # remove subtitle (everything after " : ") and joiners ("and", "&", ...)
-                title_tokens.append(' '.join(self.get_title_tokens(
-                    title, strip_joiners=True, strip_subtitle=True)))
+                # remove subtitle (everything after " : ") and joiners ("and", "und", "&", ...)
+                title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
+                    title, strip_joiners=True, strip_subtitle=True))])
 
                 # TODO: remove subtitle after " - "
 
@@ -151,26 +149,8 @@ class DNB_DE(Source):
                 #    title_v.append(' '.join(self.get_title_tokens(match.group(2),strip_joiners=True,strip_subtitle=True)))
                 #    title_v.append(' '.join(self.get_title_tokens(match.group(1),strip_joiners=True,strip_subtitle=True)))
 
-                # remove duplicates
-                tmp_unique = []
-                for i in title_tokens:
-                    if i not in tmp_unique:
-                        tmp_unique.append(i)
-                title_tokens = tmp_unique
-
-                # loop through all generated title variants and split them if they contain a digit at the end ("The book of examples 02")
-                for i in title_tokens:
-                    match = re.search("^(.+)\s+0*(\d+)$", i)
-                    if match:
-                        title_v.append([match.group(1), match.group(2)])
-                    else:
-                        title_v.append([i])
 
             # create queries
-            # Example:
-            # Book title:   The book of examples 2: Even more!
-            # Book authors: John Doe & Mustermann, Max
-
             # title and author given:
             if authors_v and title_v:
 
@@ -184,8 +164,10 @@ class DNB_DE(Source):
                 for a in authors_v:
                     for t in title_v:
                         queries.append(
-                            " AND ".join(list(map(lambda x: 'tit="%s"' % x.lstrip('0'), t)) + list(map(lambda x: 'per="%s"' % x, a))
-                                         ))
+                            " AND ".join(
+                                list(map(lambda x: 'tit="%s"' % x.lstrip('0'), t)) +
+                                list(map(lambda x: 'per="%s"' % x, a))
+                         ))
 
                 # try with first author as title and title (without subtitle) as author
                 queries.append('per="%s" AND tit="%s"' % (
@@ -205,10 +187,11 @@ class DNB_DE(Source):
                 # try with first author and splitted title words (without subtitle) in any index
                 queries.append(
                     ' AND '.join(list(map(lambda x: '"%s"' % x.lstrip('0'),
-                                          list(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True))
+                                          list(x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)))
                                           + list(self.get_author_tokens(authors, only_first_author=True))
                                           )))
                 )
+
 
             # authors given but no title
             elif authors_v and not title_v:
@@ -232,7 +215,7 @@ class DNB_DE(Source):
                 # try with title as author
                 queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + '"')
 
-        # remove duplicate queries - Fixme: Does not remove all duplicates, only most!
+        # remove duplicate queries
         uniqueQueries = []
         for i in queries:
             if i not in uniqueQueries:
@@ -240,6 +223,8 @@ class DNB_DE(Source):
 
         # Process queries
         results = None
+        query_success = False
+
         for query in uniqueQueries:
             # SRU does not work with "+" or "?" characters in query, so we simply remove them
             query = re.sub('[\+\?]', '', query)
@@ -281,15 +266,16 @@ class DNB_DE(Source):
                     'publisher_location': None,
                 }
 
-                ##### Field 300: "Physical Description" #####
-                # Filter out CDs
+
+                ##### Field 336: "Content Type" #####
+                # Filter out Audio Books
                 try:
-                    physdesc = record.xpath("./marc21:datafield[@tag='300']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
-                    match = re.search('Online-Ressource \(\d+ CD', physdesc)
-                    if match:
+                    mediatype = record.xpath("./marc21:datafield[@tag='336']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip().lower()
+                    if mediatype in ('gesprochenes Wort'):
                         return None
                 except:
                     pass
+
 
                 ##### Field 337: "Media Type" #####
                 # Filter out Audio and Video
@@ -299,6 +285,7 @@ class DNB_DE(Source):
                         return None
                 except:
                     pass
+
 
                 ##### Field 264: "Production, Publication, Distribution, Manufacture, and Copyright Notice" #####
                 # Get Publisher Name, Publishing Location, Publishing Date
@@ -920,9 +907,10 @@ class DNB_DE(Source):
                 # put current result's metdata into result queue
                 log.info("Final formatted result: \n%s\n-----" % mi)
                 result_queue.put(mi)
+                query_success = True
 
             # Stop on first successful query
-            if results:
+            if query_success:
                 break
 
     # remove sorting word markers
@@ -1111,6 +1099,18 @@ class DNB_DE(Source):
             return mapping[lang.lower()]
         except KeyError:
             return lang
+
+
+    # Remove German joiners from list of words
+    # By default, Calibre's function "get_title_tokens(...,strip_joiners=True,...)" only removes "a", "and", "the", "&"
+    def strip_german_joiners(self, wordlist):
+        tokens = []
+        for word in wordlist:
+          if word.lower() not in ( 'ein', 'eine', 'einer', 'und', 'der', 'die', 'das'):
+              # only keep word consisting of word characters or digits and being at least 2 chatacters long
+              if re.search('^[\d\w][\d\w]+$', word):
+                  tokens.append(word)
+        return tokens
 
 
 if __name__ == '__main__':  # tests
