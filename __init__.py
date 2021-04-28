@@ -85,7 +85,7 @@ class DNB_DE(Source):
             authors = [x for x in authors if x != i]
 
         # exit on insufficient inputs
-        if (isbn is None) and (idn is None) and (title is None) and (len(authors) == 0):
+        if not isbn and not idn and not title and not authors:
             log.info(
                 "This plugin requires at least either ISBN, IDN, Title or Author(s).")
             return None
@@ -114,7 +114,7 @@ class DNB_DE(Source):
 
             # create some variants of given title
             title_v = []
-            if title is not None:
+            if title:
                 title_tokens = []
 
                 # simply use given title
@@ -140,13 +140,13 @@ class DNB_DE(Source):
 
                 # TEST: remove text in braces at the end of title (if present)
                 #match = re.search("^(.+?)[\s*]\(.+\)$", title)
-                # if match is not None:
+                # if match:
                 #    title_v.append(' '.join(self.get_title_tokens(
                 #        match.group(1), strip_joiners=True, strip_subtitle=True)))
 
                 # TEST: search for title parts before and after colon (if present)
                 #match = re.search("^(.+)\s*[\-:]\s(.+)$", title)
-                # if match is not None:
+                # if match:
                 #    title_v=[]
                 #    title_v.append(' '.join(self.get_title_tokens(match.group(2),strip_joiners=True,strip_subtitle=True)))
                 #    title_v.append(' '.join(self.get_title_tokens(match.group(1),strip_joiners=True,strip_subtitle=True)))
@@ -184,7 +184,7 @@ class DNB_DE(Source):
                 for a in authors_v:
                     for t in title_v:
                         queries.append(
-                            " AND ".join(list(map(lambda x: 'tit="%s"' % x, t)) + list(map(lambda x: 'per="%s"' % x, a))
+                            " AND ".join(list(map(lambda x: 'tit="%s"' % x.lstrip('0'), t)) + list(map(lambda x: 'per="%s"' % x, a))
                                          ))
 
                 # try with first author as title and title (without subtitle) as author
@@ -204,7 +204,7 @@ class DNB_DE(Source):
 
                 # try with first author and splitted title words (without subtitle) in any index
                 queries.append(
-                    ' AND '.join(list(map(lambda x: '"%s"' % x,
+                    ' AND '.join(list(map(lambda x: '"%s"' % x.lstrip('0'),
                                           list(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + list(self.get_author_tokens(authors, only_first_author=True))
                                           )))
                 )
@@ -226,7 +226,7 @@ class DNB_DE(Source):
                 # try with title as title
                 for t in title_v:
                     queries.append(
-                        " AND ".join(list(map(lambda x: 'tit="%s"' % x, t)))
+                        " AND ".join(list(map(lambda x: 'tit="%s"' % x.lstrip('0'), t)))
                     )
                 # try with title as author
                 queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + '"')
@@ -249,7 +249,7 @@ class DNB_DE(Source):
 
             results = self.getSearchResults(log, query, timeout)
 
-            if results is None:
+            if not results:
                 continue
 
             log.info("Parsing records")
@@ -382,7 +382,7 @@ class DNB_DE(Source):
 
                     code_n = []
                     for i in field.xpath("./marc21:subfield[@code='n' and string-length(text())>0]", namespaces=ns):
-                        # looks like sometimes DNB does not know the series index and uses something like "[...]"
+                        # looks like sometimes DNB does not know the series_index and uses something like "[...]"
                         match = re.search("(\d+([,\.]\d+)?)", i.text.strip())
                         if match:
                             code_n.append(match.group(1))
@@ -896,7 +896,7 @@ class DNB_DE(Source):
                     mi.tags = self.uniq(book['subjects_gnd'])
                 # 1: use only subjects_gnd if found, else subjects_non_gnd
                 elif self.cfg_fetch_subjects == 1:
-                    if len(book['subjects_gnd']) > 0:
+                    if book['subjects_gnd']:
                         mi.tags = self.uniq(book['subjects_gnd'])
                     else:
                         mi.tags = self.uniq(book['subjects_non_gnd'])
@@ -905,7 +905,7 @@ class DNB_DE(Source):
                     mi.tags = self.uniq(book['subjects_gnd'] + book['subjects_non_gnd'])
                 # 3: use only subjects_non_gnd if found, else subjects_gnd
                 elif self.cfg_fetch_subjects == 3:
-                    if len(book['subjects_non_gnd']) > 0:
+                    if book['subjects_non_gnd']:
                         mi.tags = self.uniq(book['subjects_non_gnd'])
                     else:
                         mi.tags = self.uniq(book['subjects_gnd'])
@@ -1036,7 +1036,7 @@ class DNB_DE(Source):
     def get_cached_cover_url(self, identifiers):
         url = None
         isbn = check_isbn(identifiers.get('isbn', None))
-        if isbn is None:
+        if not isbn:
             return None
         url = self.COVERURL % isbn
         return url
