@@ -189,7 +189,7 @@ class DNB_DE(Source):
 
                 # try with first author as title and title (without subtitle) as author
                 queries.append('per="%s" AND tit="%s"' % (
-                    ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
+                    ' '.join(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
                     ' '.join(self.get_author_tokens(authors, only_first_author=True))
                 ))
 
@@ -197,7 +197,7 @@ class DNB_DE(Source):
                 # try with first author and title (without subtitle) in any index
                 queries.append(
                     ' AND '.join(list(map(lambda x: '"%s"' % x, [
-                        " ".join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
+                        " ".join(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
                         " ".join(self.get_author_tokens(authors, only_first_author=True))
                     ])))
                 )
@@ -205,7 +205,8 @@ class DNB_DE(Source):
                 # try with first author and splitted title words (without subtitle) in any index
                 queries.append(
                     ' AND '.join(list(map(lambda x: '"%s"' % x.lstrip('0'),
-                                          list(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + list(self.get_author_tokens(authors, only_first_author=True))
+                                          list(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True))
+                                          + list(self.get_author_tokens(authors, only_first_author=True))
                                           )))
                 )
 
@@ -219,7 +220,7 @@ class DNB_DE(Source):
                 queries.append('per="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
 
                 # try with first author as title
-                queries.append('tit="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
+                queries.append('tit="' + ' '.join(x.lstrip('0') for x in self.get_author_tokens(authors, only_first_author=True)) + '"')
 
             # title given but no author
             elif not authors_v and title_v:
