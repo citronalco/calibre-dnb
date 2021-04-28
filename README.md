@@ -16,7 +16,7 @@ This plugin works with Python 2 and Python 3.
 1. Search for "Deutsche Nationalbibliothek" and click the "Install" button.
 1. Restart Calibre
 
-You can also downloaded the plugin as ZIP file from here: https://github.com/citronalco/calibre-dnb/releases/
+You can also downloaded the plugin as ZIP file from here: https://git.bingo-ev.de/geierb/calibre-dnb/-/releases
 
 ### Limitations:
 
