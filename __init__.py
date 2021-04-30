@@ -122,19 +122,19 @@ class DNB_DE(Source):
                 title_v.append([ ' '.join(self.get_title_tokens(
                     title, strip_joiners=False, strip_subtitle=False))] )
 
-                # remove subtitle (everything after " : ")
-                title_v.append([ ' '.join(self.get_title_tokens(
-                    title, strip_joiners=False, strip_subtitle=True))] )
-
                 # remove some punctation characters and joiners ("and", "und", "&", ...)
                 title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
                     title, strip_joiners=True, strip_subtitle=False))])
+
+                # remove subtitle (everything after " : ")
+                title_v.append([ ' '.join(self.get_title_tokens(
+                    title, strip_joiners=False, strip_subtitle=True))] )
 
                 # remove subtitle (everything after " : ") and joiners ("and", "und", "&", ...)
                 title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
                     title, strip_joiners=True, strip_subtitle=True))])
 
-                # TODO: remove subtitle after " - "
+                # TODO: remove subtitle after or before " - " and "\D. "
 
                 # TEST: remove text in braces at the end of title (if present)
                 #match = re.search("^(.+?)[\s*]\(.+\)$", title)
@@ -150,7 +150,7 @@ class DNB_DE(Source):
                 #    title_v.append(' '.join(self.get_title_tokens(match.group(1),strip_joiners=True,strip_subtitle=True)))
 
 
-            # create queries
+            ## create queries
             # title and author given:
             if authors_v and title_v:
 
@@ -174,7 +174,6 @@ class DNB_DE(Source):
                     ' '.join(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
                     ' '.join(self.get_author_tokens(authors, only_first_author=True))
                 ))
-
 
                 # try with first author and title (without subtitle) in any index
                 queries.append(
@@ -221,7 +220,7 @@ class DNB_DE(Source):
             if i not in uniqueQueries:
                 uniqueQueries.append(i)
 
-        # Process queries
+        ## Process queries
         results = None
         query_success = False
 
@@ -246,7 +245,6 @@ class DNB_DE(Source):
                 book = {
                     'series': None,
                     'series_index': None,
-                    'publisher': None,
                     'pubdate': None,
                     'language': None,
                     'languages': [],
@@ -271,7 +269,7 @@ class DNB_DE(Source):
                 # Filter out Audio Books
                 try:
                     mediatype = record.xpath("./marc21:datafield[@tag='336']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip().lower()
-                    if mediatype in ('gesprochenes Wort'):
+                    if mediatype in ('gesprochenes wort'):
                         return None
                 except:
                     pass
@@ -298,11 +296,11 @@ class DNB_DE(Source):
                         break
 
                     if not book['publisher_location']:
-                        try:
-                            book['publisher_location'] = field.xpath("./marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
-                            log.info("[264.a] Publisher Location: %s" % book['publisher_location'])
-                        except IndexError:
-                            pass
+                        location_parts = []
+                        for i in field.xpath("./marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                            location_parts.append(i.text.strip())
+                        if location_parts:
+                            book['publisher_location'] = ' '.join(location_parts).strip('[]')
 
                     if not book['publisher_name']:
                         try:
@@ -731,8 +729,12 @@ class DNB_DE(Source):
                         )
                     )
 
-                if book['languages']:
-                    log.info("[041.a] Languages: %s" % ",".join(book['languages']))
+                try:
+                    if book['languages']:
+                        log.info("[041.a] Languages: %s" % ",".join(book['languages']))
+                # FIXME: For some reason sometimes a "None" slips through (idn: 1160947511)
+                except TypeError:
+                    pass
 
 
                 ##### SERIES GUESSER #####
@@ -811,7 +813,7 @@ class DNB_DE(Source):
                                             guessed_series = match.group(1)
                                             guessed_title = match.group(2)
 
-                                            log.info("[Series Guesser 2P3] matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
+                                            log.info("[Series Guesser] 2P3 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
 
                     elif len(parts) == 1:
                         # if title looks like: "Name of the series - Title (Episode 2)"
@@ -963,12 +965,13 @@ class DNB_DE(Source):
             # do not accept some other unwanted series names
             # TODO: Has issues with Umlaus in regex (or series string?)
             for i in [
+                '^Roman$',
                 '^\[Ariadne\]$', '^Ariadne$', '^atb$', '^BvT$', '^Bastei L', '^bb$', '^Beck Paperback', '^Beck\-.*berater', '^Beck\'sche Reihe', '^Bibliothek Suhrkamp$', '^BLT$',
                 '^DLV-Taschenbuch$', '^Edition Suhrkamp$', '^Edition Lingen Stiftung$', '^Edition C', '^Edition Metzgenstein$', '^ETB$', '^dtv', '^Ein Goldmann',
                 '^Oettinger-Taschenbuch$', '^Haymon-Taschenbuch$', '^Mira Taschenbuch$', '^Suhrkamp-Taschenbuch$', '^Bastei-L', '^Hey$', '^btb$', '^bt-Kinder', '^Ravensburger',
                 '^Sammlung Luchterhand$', '^blanvalet$', '^KiWi$', '^Piper$', '^C.H. Beck', '^Rororo', '^Goldmann$', '^Moewig$', '^Fischer Klassik$', '^hey! shorties$', '^Ullstein',
                 '^Unionsverlag', '^Ariadne-Krimi', '^C.-Bertelsmann', '^Phantastische Bibliothek$', '^Beck Paperback$', '^Beck\'sche Reihe$', '^Knaur', '^Volk-und-Welt',
-                    '^Allgemeine', '^Premium', '^Horror-Bibliothek$']:
+                '^Allgemeine', '^Premium', '^Horror-Bibliothek$']:
                 if re.search(i, series, flags=re.IGNORECASE):
                     log.info("[Series Cleaning] Series %s contains unwanted string %s, ignoring" % (series, i))
                     return None
@@ -1106,10 +1109,8 @@ class DNB_DE(Source):
     def strip_german_joiners(self, wordlist):
         tokens = []
         for word in wordlist:
-          if word.lower() not in ( 'ein', 'eine', 'einer', 'und', 'der', 'die', 'das'):
-              # only keep word consisting of word characters or digits and being at least 2 chatacters long
-              if re.search('^[\d\w][\d\w]+$', word):
-                  tokens.append(word)
+            if word.lower() not in ( 'ein', 'eine', 'einer', 'und', 'der', 'die', 'das'):
+                tokens.append(word)
         return tokens
 
 
