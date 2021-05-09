@@ -266,24 +266,23 @@ class DNB_DE(Source):
 
 
                 ##### Field 336: "Content Type" #####
-                # Filter out Audio Books
+                # Skip Audio Books
                 try:
                     mediatype = record.xpath("./marc21:datafield[@tag='336']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip().lower()
                     if mediatype in ('gesprochenes wort'):
-                        return None
+                        continue
                 except:
                     pass
 
 
                 ##### Field 337: "Media Type" #####
-                # Filter out Audio and Video
+                # Skip Audio and Video
                 try:
                     mediatype = record.xpath("./marc21:datafield[@tag='337']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip().lower()
                     if mediatype in ('audio', 'video'):
-                        return None
+                        continue
                 except:
                     pass
-
 
                 ##### Field 264: "Production, Publication, Distribution, Manufacture, and Copyright Notice" #####
                 # Get Publisher Name, Publishing Location, Publishing Date
@@ -368,10 +367,14 @@ class DNB_DE(Source):
 
                     code_n = []
                     for i in field.xpath("./marc21:subfield[@code='n' and string-length(text())>0]", namespaces=ns):
-                        # looks like sometimes DNB does not know the series_index and uses something like "[...]"
                         match = re.search("(\d+([,\.]\d+)?)", i.text.strip())
                         if match:
                             code_n.append(match.group(1))
+                        else:
+                            # looks like sometimes DNB does not know the series_index and uses something like "[...]"
+                            match = re.search("\[\.\.\.\]", i.text.strip())
+                            if match:
+                                code_n.append('0')
 
                     code_p = []
                     for i in field.xpath("./marc21:subfield[@code='p' and string-length(text())>0]", namespaces=ns):
@@ -613,13 +616,14 @@ class DNB_DE(Source):
                     # Use Series Name from attribute "a" if not already found in attribute "v"
                     if not series:
                         series = i.xpath("./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
-                        log.info("[490.a] Series: %s" % book['series'])
+                        log.info("[490.a] Series: %s" % series)
 
                     if series:
-                        book['series'] = series
-                        book['series'] = self.cleanUpSeries(log, book['series'], book['publisher_name'])
-                    if series_index:
-                        book['series_index'] = series_index
+                        series = self.cleanUpSeries(log, series, book['publisher_name'])
+
+                        if series and series_index:
+                            book['series'] = series
+                            book['series_index'] = series_index
 
 
                 ##### Field 246: "Varying Form of Title" #####
@@ -630,14 +634,17 @@ class DNB_DE(Source):
                         break
 
                     match = re.search("^(.+?) ; (\d+[,\.\d+]?)$", i.text.strip())
-
                     if match:
-                        book['series'] = match.group(1)
-                        log.info("[246.a] Series: %s" % book['series'])
-                        book['series'] = self.cleanUpSeries(log, book['series'], book['publisher_name'])
-
-                        book['series_index'] = match.group(2)
+                        series = match.group(1)
+                        series_index = match.group(2)
+                        log.info("[246.a] Series: %s" % series)
                         log.info("[246.a] Series_Index: %s" % book['series_index'])
+
+                        series = self.cleanUpSeries(log, match.group(1), book['publisher_name'])
+
+                        if series and series_index:
+                            book['series'] = series
+                            book['series_index'] = series_index
 
 
                 ##### Field 800: "Series Added Entry-Personal Name" #####
@@ -650,13 +657,18 @@ class DNB_DE(Source):
                     # Series Index
                     match = re.search("(\d+[,\.\d+]?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
                     if match:
-                        book['series_index'] = match.group(1)
-                        log.info("[800.v] Series_Index: %s" % book['series_index'])
+                        series_index = match.group(1)
+                        log.info("[800.v] Series_Index: %s" % series_index)
 
                     # Series
-                    book['series'] = i.xpath("./marc21:subfield[@code='t']", namespaces=ns)[0].text.strip()
-                    log.info("[800.t] Series: %s" % book['series'])
-                    book['series'] = self.cleanUpSeries(log, book['series'], book['publisher_name'])
+                    series = i.xpath("./marc21:subfield[@code='t']", namespaces=ns)[0].text.strip()
+                    log.info("[800.t] Series: %s" % series)
+
+                    series = self.cleanUpSeries(log, series, book['publisher_name'])
+
+                    if series and series_index:
+                        book['series'] = series
+                        book['series_index'] = series_index
 
 
                 ##### Field 830: "Series Added Entry-Uniform Title" #####
@@ -669,13 +681,18 @@ class DNB_DE(Source):
                     # Series Index
                     match = re.search("(\d+[,\.\d+]?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
                     if match:
-                        book['series_index'] = match.group(1)
-                        log.info("[830.v] Series_Index: %s" % book['series_index'])
+                        series_index = match.group(1)
+                        log.info("[830.v] Series_Index: %s" % series_index)
 
                     # Series
-                    book['series'] = i.xpath("./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
-                    log.info("[830.a] Series: %s" % book['series'])
-                    book['series'] = self.cleanUpSeries(log, book['series'], book['publisher_name'])
+                    series = i.xpath("./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
+                    log.info("[830.a] Series: %s" % series)
+
+                    series = self.cleanUpSeries(log, series, book['publisher_name'])
+
+                    if series and series_index:
+                        book['series'] = series
+                        book['series_index'] = series_index
 
 
                 ##### Field 689 #####
@@ -965,7 +982,7 @@ class DNB_DE(Source):
             # do not accept some other unwanted series names
             # TODO: Has issues with Umlaus in regex (or series string?)
             for i in [
-                '^Roman$',
+                '^Roman$', '^Science-fiction$',
                 '^\[Ariadne\]$', '^Ariadne$', '^atb$', '^BvT$', '^Bastei L', '^bb$', '^Beck Paperback', '^Beck\-.*berater', '^Beck\'sche Reihe', '^Bibliothek Suhrkamp$', '^BLT$',
                 '^DLV-Taschenbuch$', '^Edition Suhrkamp$', '^Edition Lingen Stiftung$', '^Edition C', '^Edition Metzgenstein$', '^ETB$', '^dtv', '^Ein Goldmann',
                 '^Oettinger-Taschenbuch$', '^Haymon-Taschenbuch$', '^Mira Taschenbuch$', '^Suhrkamp-Taschenbuch$', '^Bastei-L', '^Hey$', '^btb$', '^bt-Kinder', '^Ravensburger',
