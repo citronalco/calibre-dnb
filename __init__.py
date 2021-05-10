@@ -36,7 +36,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 1, 1)
+    version = (3, 1, 2)
     minimum_calibre_version = (0, 9, 33)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -214,11 +214,19 @@ class DNB_DE(Source):
                 # try with title as author
                 queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + '"')
 
+                # try with title (without subtitle) in any index
+                queries.append(
+                    ' AND '.join(list(map(lambda x: '"%s"' % x, [
+                        " ".join(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True))
+                    ])))
+                )
+
         # remove duplicate queries
         uniqueQueries = []
         for i in queries:
             if i not in uniqueQueries:
                 uniqueQueries.append(i)
+
 
         ## Process queries
         results = None
