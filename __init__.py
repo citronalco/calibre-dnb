@@ -36,7 +36,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 1, 2)
+    version = (3, 1, 3)
     minimum_calibre_version = (0, 9, 33)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -49,7 +49,7 @@ class DNB_DE(Source):
     prefer_results_with_isbn = True
 
     QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&maximumRecords=100&operation=searchRetrieve&recordSchema=MARC21-xml&query=%s'
-    COVERURL = 'https://portal.dnb.de/opac/mvb/cover.htm?isbn=%s'
+    COVERURL = 'https://portal.dnb.de/opac/mvb/cover?isbn=%s'
 
     def load_config(self):
         # Config settings
@@ -122,17 +122,17 @@ class DNB_DE(Source):
                 title_v.append([ ' '.join(self.get_title_tokens(
                     title, strip_joiners=False, strip_subtitle=False))] )
 
-                # remove some punctation characters and joiners ("and", "und", "&", ...)
+                # remove some punctation characters, joiners ("and", "und", "&", ...) and single non-word characters
                 title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
-                    title, strip_joiners=True, strip_subtitle=False))])
+                    title, strip_joiners=True, strip_subtitle=False)) if (len(x)>1 or x.isnumeric())]
 
                 # remove subtitle (everything after " : ")
                 title_v.append([ ' '.join(self.get_title_tokens(
                     title, strip_joiners=False, strip_subtitle=True))] )
 
-                # remove subtitle (everything after " : ") and joiners ("and", "und", "&", ...)
+                # remove subtitle (everything after " : "), joiners ("and", "und", "&", ...) and single non-word characters
                 title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
-                    title, strip_joiners=True, strip_subtitle=True))])
+                    title, strip_joiners=True, strip_subtitle=True)) if (len(x)>1 or x.isnumeric())]
 
                 # TODO: remove subtitle after or before " - " and "\D. "
 
@@ -147,7 +147,7 @@ class DNB_DE(Source):
                 # if match:
                 #    title_v=[]
                 #    title_v.append(' '.join(self.get_title_tokens(match.group(2),strip_joiners=True,strip_subtitle=True)))
-                #    title_v.append(' '.join(self.get_title_tokens(match.group(1),strip_joiners=True,strip_subtitle=True)))
+                #    title_v.append(' '.join(self.get_title_tokens(match.group(1),strip_joiners=True,strip_subtitle=True))
 
 
             ## create queries
