@@ -36,7 +36,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 1, 3)
+    version = (3, 1, 4)
     minimum_calibre_version = (0, 9, 33)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -124,7 +124,7 @@ class DNB_DE(Source):
 
                 # remove some punctation characters, joiners ("and", "und", "&", ...) and single non-word characters
                 title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
-                    title, strip_joiners=True, strip_subtitle=False)) if (len(x)>1 or x.isnumeric())]
+                    title, strip_joiners=True, strip_subtitle=False)) if (len(x)>1 or x.isnumeric())])
 
                 # remove subtitle (everything after " : ")
                 title_v.append([ ' '.join(self.get_title_tokens(
@@ -132,7 +132,7 @@ class DNB_DE(Source):
 
                 # remove subtitle (everything after " : "), joiners ("and", "und", "&", ...) and single non-word characters
                 title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
-                    title, strip_joiners=True, strip_subtitle=True)) if (len(x)>1 or x.isnumeric())]
+                    title, strip_joiners=True, strip_subtitle=True)) if (len(x)>1 or x.isnumeric())])
 
                 # TODO: remove subtitle after or before " - " and "\D. "
 
