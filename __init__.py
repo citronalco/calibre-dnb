@@ -36,11 +36,11 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 1, 4)
+    version = (3, 1, 5)
     minimum_calibre_version = (0, 9, 33)
 
     capabilities = frozenset(['identify', 'cover'])
-    touched_fields = frozenset(['title', 'authors', 'publisher', 'pubdate', 'languages', 'tags', 'identifier:urn',
+    touched_fields = frozenset(['title', 'title_sort', 'authors', 'author_sort', 'publisher', 'pubdate', 'languages', 'tags', 'identifier:urn',
                                 'identifier:idn', 'identifier:isbn', 'identifier:ddc', 'series', 'series_index', 'comments'])
     has_html_comments = True
     can_get_multiple_covers = False
@@ -475,11 +475,6 @@ class DNB_DE(Source):
                         book['authors'].extend(involved_persons)
                         log.info("[700.a] Involved Persons: %s" % " & ".join(involved_persons))
 
-                # Author_Sort
-                if book['authors']:
-                    book['author_sort'] = book['authors'][0]
-                    log.info("[100.a,700.a] Author_Sort: %s" % book['author_sort'])
-
 
                 ##### Field 856: "Electronic Location and Access" #####
                 # Get Comments
@@ -757,7 +752,6 @@ class DNB_DE(Source):
                 try:
                     if book['languages']:
                         log.info("[041.a] Languages: %s" % ",".join(book['languages']))
-                # FIXME: For some reason sometimes a "None" slips through (idn: 1160947511)
                 except TypeError:
                     pass
 
@@ -879,12 +873,16 @@ class DNB_DE(Source):
                 if self.cfg_append_edition_to_title == True and book['edition']:
                     book['title'] = book['title'] + " : " + book['edition']
 
+                authors = list(map(lambda i: self.removeSortingCharacters(i), book['authors']))
+
                 mi = Metadata(
                     self.removeSortingCharacters(book['title']),
-                    list(map(lambda i: self.removeSortingCharacters(i), book['authors']))
+                    list(map(lambda i: re.sub("^(.+), (.+)$", r"\2 \1", i), authors))
                 )
+
+                mi.author_sort = " & ".join(authors)
+
                 mi.title_sort = self.removeSortingCharacters(book['title_sort'])
-                mi.author_sort = self.removeSortingCharacters(book['author_sort'])
 
                 if book['languages']:
                     mi.languages = book['languages']
@@ -1100,7 +1098,7 @@ class DNB_DE(Source):
 
     # Convert ISO 639-2/B to ISO 639-3
     def iso639_2b_as_iso639_3(self, lang):
-        # most codes in ISO 639-2/B are the same as in ISO 639-3. This are exceptions:
+        # Most codes in ISO 639-2/B are the same as in ISO 639-3. This are the exceptions:
         mapping = {
             'alb': 'sqi',
             'arm': 'hye',
