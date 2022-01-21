@@ -12,6 +12,7 @@ from calibre.ebooks.metadata import check_isbn
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.library.comments import sanitize_comments_html
 from calibre.utils.localization import lang_as_iso639_1
+from calibre.ebooks import normalize
 
 import re
 import datetime
@@ -36,7 +37,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 1, 5)
+    version = (3, 1, 6)
     minimum_calibre_version = (0, 9, 33)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -1020,10 +1021,13 @@ class DNB_DE(Source):
         xmlData = None
         try:
             data = self.browser.open_novisit(queryUrl, timeout=timeout).read()
-            #log.info('Got some data: %s' % data)
+
+            # "data" is of type "bytes", decode it to an utf-8 string, normalize the UTF-8 encoding (from decomposed to composed), and convert it back to bytes
+            data = normalize(data.decode('utf-8')).encode('utf-8')
+            #log.info('Got some data : %s' % data)
 
             xmlData = etree.XML(data)
-            # log.info(etree.tostring(xmlData,pretty_print=True))
+            #log.info(etree.tostring(xmlData,pretty_print=True))
 
             numOfRecords = xmlData.xpath("./zs:numberOfRecords", namespaces={"zs": "http://www.loc.gov/zing/srw/"})[0].text.strip()
             log.info('Got records: %s' % numOfRecords)
