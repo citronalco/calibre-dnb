@@ -1047,7 +1047,8 @@ class DNB_DE(Source):
                 log.error('ERROR: %s' % diag)
                 return None
             except:
-                log.error('ERROR: Got no valid response.')
+                log.error('ERROR: Got invalid response:')
+                log.error(data)
                 return None
 
 
