@@ -48,6 +48,7 @@ class DNB_DE(Source):
     supports_gzip_transfer_encoding = True
     cached_cover_url_is_reliable = True
     prefer_results_with_isbn = True
+    ignore_ssl_errors = True
 
     QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&maximumRecords=100&operation=searchRetrieve&recordSchema=MARC21-xml&query=%s'
     COVERURL = 'https://portal.dnb.de/opac/mvb/cover?isbn=%s'
