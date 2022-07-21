@@ -38,7 +38,7 @@ class DNB_DE(Source):
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
     version = (3, 1, 7)
-    minimum_calibre_version = (0, 9, 33)
+    minimum_calibre_version = (3, 48, 0)
 
     capabilities = frozenset(['identify', 'cover'])
     touched_fields = frozenset(['title', 'title_sort', 'authors', 'author_sort', 'publisher', 'pubdate', 'languages', 'tags', 'identifier:urn',
