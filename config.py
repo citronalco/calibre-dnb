@@ -9,15 +9,8 @@ __license__ = 'GPL v3'
 __copyright__ = '2017, Bernhard Geier <geierb@geierb.de>'
 __docformat__ = 'restructuredtext en'
 
-try:
-    from PyQt5 import Qt as QtGui
-except ImportError:
-    from PyQt4 import QtGui
-try:
-    from PyQt5.Qt import QLabel, QGridLayout, Qt, QGroupBox, QCheckBox
-except ImportError:
-    from PyQt4.Qt import QLabel, QGridLayout, Qt, QGroupBox, QCheckBox
 
+from PyQt5.Qt import QLabel, QGridLayout, QGroupBox, QCheckBox, QButtonGroup, QRadioButton
 
 STORE_NAME = 'Options'
 
@@ -55,7 +48,7 @@ class ConfigWidget(DefaultConfigWidget):
                                       'This plugin can try to extract series and series_index from the book title.\n')
         other_group_box_layout.addWidget(guess_series_label, 0, 0, 1, 1)
 
-        self.guess_series_checkbox = QtGui.QCheckBox(self)
+        self.guess_series_checkbox = QCheckBox(self)
         self.guess_series_checkbox.setChecked(
             c.get(KEY_GUESS_SERIES, DEFAULT_STORE_VALUES[KEY_GUESS_SERIES]))
         other_group_box_layout.addWidget(
@@ -71,7 +64,7 @@ class ConfigWidget(DefaultConfigWidget):
         other_group_box_layout.addWidget(
             append_edition_to_title_label, 1, 0, 1, 1)
 
-        self.append_edition_to_title_checkbox = QtGui.QCheckBox(self)
+        self.append_edition_to_title_checkbox = QCheckBox(self)
         self.append_edition_to_title_checkbox.setChecked(c.get(
             KEY_APPEND_EDITION_TO_TITLE, DEFAULT_STORE_VALUES[KEY_APPEND_EDITION_TO_TITLE]))
         other_group_box_layout.addWidget(
@@ -85,11 +78,11 @@ class ConfigWidget(DefaultConfigWidget):
                                         'You can choose which ones to fetch.')
         other_group_box_layout.addWidget(fetch_subjects_label, 2, 0, 1, 1)
 
-        self.fetch_subjects_radios_group = QtGui.QButtonGroup(other_group_box)
+        self.fetch_subjects_radios_group = QButtonGroup(other_group_box)
         titles = ['only GND subjects', 'GND subjects if available, otherwise non-GND subjects', 'GND and non-GND subjects',
                   'non-GND subjects if available, otherwise GND subjects', 'only non-GND subjects', 'none']
         self.fetch_subjects_radios = [
-            QtGui.QRadioButton(title) for title in titles]
+            QRadioButton(title) for title in titles]
         for i, radio in enumerate(self.fetch_subjects_radios):
             if i == c.get(KEY_FETCH_SUBJECTS, DEFAULT_STORE_VALUES[KEY_FETCH_SUBJECTS]):
                 radio.setChecked(True)
