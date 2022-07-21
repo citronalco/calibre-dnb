@@ -4,7 +4,7 @@
 from __future__ import unicode_literals
 
 __license__ = 'GPL v3'
-__copyright__ = '2018, Bernhard Geier <geierb@geierb.de>'
+__copyright__ = '2017, Bernhard Geier <geierb@geierb.de>'
 __docformat__ = 'en'
 
 from calibre.ebooks.metadata.sources.base import Source
