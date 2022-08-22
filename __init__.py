@@ -37,7 +37,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 2, 0)
+    version = (3, 2, 1)
     minimum_calibre_version = (3, 48, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -724,7 +724,7 @@ class DNB_DE(Source):
                         if i.text.startswith("("):
                             continue
                         # skip one-character subjects:
-                        if len(i) < 2:
+                        if len(i.text) < 2:
                             continue
 
                         book['subjects_non_gnd'].extend(re.split(',|;', self.removeSortingCharacters(i.text)))
