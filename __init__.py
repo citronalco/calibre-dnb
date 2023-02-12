@@ -1,6 +1,11 @@
 #!/usr/bin/env python
-
 # -*- coding: utf-8 -*-
+# vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
+
+# TODO:
+# - create class to parse records, access data with "get"
+# - or at least use functions
+
 from __future__ import unicode_literals
 
 __license__ = 'GPL v3'
@@ -23,12 +28,20 @@ except ImportError:
     from urllib.parse import quote  # Python3
 
 from lxml import etree
-from lxml.etree import tostring
 
 try:
     from Queue import Queue, Empty  # Python2
 except ImportError:
     from queue import Queue, Empty  # Python3
+
+try:
+    # Python 2
+    from urllib2 import Request, urlopen,  HTTPError
+except ImportError:
+    # Python 3
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
+
 
 
 class DNB_DE(Source):
@@ -37,7 +50,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 2, 1)
+    version = (3, 2, 2)
     minimum_calibre_version = (3, 48, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -81,10 +94,13 @@ class DNB_DE(Source):
         idn = identifiers.get('dnb-idn', None)
         isbn = check_isbn(identifiers.get('isbn', None))
 
-        # ignore unknown authors
-        ignored_authors = ["V. A.", "V.A.", "Unknown", "Unbekannt"]
+        #isbn = None
+        #authors = []
+
+        # remove pseudo authors from list of authors
+        ignored_authors = ['v. a.', 'v.a.', 'va', 'diverse', 'unknown', 'unbekannt']
         for i in ignored_authors:
-            authors = [x for x in authors if x != i]
+            authors = [x for x in authors if x.lower() != i.lower()]
 
         # exit on insufficient inputs
         if not isbn and not idn and not title and not authors:
@@ -92,158 +108,13 @@ class DNB_DE(Source):
                 "This plugin requires at least either ISBN, IDN, Title or Author(s).")
             return None
 
-        # build queries
-        queries = []
 
-        if idn:
-            # if IDN is given only search for the IDN and skip all the other stuff
-            queries.append('num=' + idn)
-        elif isbn:
-            # if ISBN is given only search for the ISBN and skip all the other stuff
-            queries.append('num=' + isbn)
-        else:
-            # create some variants of given authors
-            authors_v = []
-            if len(authors) > 0:
-                # simply use all authors
-                for a in authors:
-                    authors_v.append(authors)
-
-                # use all authors, one by one
-                if len(authors) > 1:
-                    for a in authors:
-                        authors_v.append([a])
-
-            # create some variants of given title
-            title_v = []
-            if title:
-                # simply use given title
-                title_v.append([ title ])
-
-                # remove some punctation characters
-                title_v.append([ ' '.join(self.get_title_tokens(
-                    title, strip_joiners=False, strip_subtitle=False))] )
-
-                # remove some punctation characters, joiners ("and", "und", "&", ...) and single non-word characters
-                title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
-                    title, strip_joiners=True, strip_subtitle=False)) if (len(x)>1 or x.isnumeric())])
-
-                # remove subtitle (everything after " : ")
-                title_v.append([ ' '.join(self.get_title_tokens(
-                    title, strip_joiners=False, strip_subtitle=True))] )
-
-                # remove subtitle (everything after " : "), joiners ("and", "und", "&", ...) and single non-word characters
-                title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
-                    title, strip_joiners=True, strip_subtitle=True)) if (len(x)>1 or x.isnumeric())])
-
-                # TODO: remove subtitle after or before " - " and "\D. "
-
-                # TEST: remove text in braces at the end of title (if present)
-                #match = re.search("^(.+?)[\s*]\(.+\)$", title)
-                # if match:
-                #    title_v.append(' '.join(self.get_title_tokens(
-                #        match.group(1), strip_joiners=True, strip_subtitle=True)))
-
-                # TEST: search for title parts before and after colon (if present)
-                #match = re.search("^(.+)\s*[\-:]\s(.+)$", title)
-                # if match:
-                #    title_v=[]
-                #    title_v.append(' '.join(self.get_title_tokens(match.group(2),strip_joiners=True,strip_subtitle=True)))
-                #    title_v.append(' '.join(self.get_title_tokens(match.group(1),strip_joiners=True,strip_subtitle=True))
-
-
-            ## create queries
-            # title and author given:
-            if authors_v and title_v:
-
-                # try with title and all authors
-                queries.append('tst="%s" AND %s' % (
-                    title,
-                    " AND ".join(list(map(lambda x: 'per="%s"' % x, authors))),
-                ))
-
-                # try with cartiesian product of all authors and title variations created above
-                for a in authors_v:
-                    for t in title_v:
-                        queries.append(
-                            " AND ".join(
-                                list(map(lambda x: 'tit="%s"' % x.lstrip('0'), t)) +
-                                list(map(lambda x: 'per="%s"' % x, a))
-                         ))
-
-                # try with first author as title and title (without subtitle) as author
-                queries.append('per="%s" AND tit="%s"' % (
-                    ' '.join(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
-                    ' '.join(self.get_author_tokens(authors, only_first_author=True))
-                ))
-
-                # try with first author and title (without subtitle) in any index
-                queries.append(
-                    ' AND '.join(list(map(lambda x: '"%s"' % x, [
-                        " ".join(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
-                        " ".join(self.get_author_tokens(authors, only_first_author=True))
-                    ])))
-                )
-
-                # try with first author and splitted title words (without subtitle) in any index
-                queries.append(
-                    ' AND '.join(list(map(lambda x: '"%s"' % x.lstrip('0'),
-                                          list(x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)))
-                                          + list(self.get_author_tokens(authors, only_first_author=True))
-                                          )))
-                )
-
-
-            # authors given but no title
-            elif authors_v and not title_v:
-                # try with all authors as authors
-                for a in authors_v:
-                    queries.append(" AND ".join(list(map(lambda x: 'per="%s"' % x, a))))
-
-                # try with first author as author
-                queries.append('per="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
-
-                # try with first author as title
-                queries.append('tit="' + ' '.join(x.lstrip('0') for x in self.get_author_tokens(authors, only_first_author=True)) + '"')
-
-            # title given but no author
-            elif not authors_v and title_v:
-                # try with title as title
-                for t in title_v:
-                    queries.append(
-                        " AND ".join(list(map(lambda x: 'tit="%s"' % x.lstrip('0'), t)))
-                    )
-                # try with title as author
-                queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + '"')
-
-                # try with title (without subtitle) in any index
-                queries.append(
-                    ' AND '.join(list(map(lambda x: '"%s"' % x, [
-                        " ".join(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True))
-                    ])))
-                )
-
-        # remove duplicate queries
-        uniqueQueries = []
-        for i in queries:
-            if i not in uniqueQueries:
-                uniqueQueries.append(i)
-
-
-        ## Process queries
+        # process queries
         results = None
         query_success = False
 
-        for query in uniqueQueries:
-            # SRU does not work with "+" or "?" characters in query, so we simply remove them
-            query = re.sub('[\+\?]', '', query)
-
-            # do not search in films, music, microfiches or audiobooks
-            query = query + ' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)'
-            log.info(query)
-
-            results = self.getSearchResults(log, query, timeout)
-
+        for query in self.create_query_variations(log, idn, isbn, authors, title):
+            results = self.execute_query(log, query, timeout)
             if not results:
                 continue
 
@@ -272,7 +143,10 @@ class DNB_DE(Source):
                     'subjects_non_gnd': [],
                     'publisher_name': None,
                     'publisher_location': None,
+
+                    'alternative_xmls': [], 
                 }
+
 
 
                 ##### Field 336: "Content Type" #####
@@ -293,6 +167,20 @@ class DNB_DE(Source):
                         continue
                 except:
                     pass
+
+
+                ##### Field 776: "Additional Physical Form Entry" #####
+                # References from ebook's entry to paper book's entry (and vice versa)
+                # Often only one of them contains comments or a cover
+                # Example: dnb-idb=1136409025
+                for i in record.xpath("./marc21:datafield[@tag='776']/marc21:subfield[@code='w' and string-length(text())>0]", namespaces=ns):
+                    other_idn = re.sub("^\(.*\)", "", i.text.strip())
+                    log.info("[776.w] Found other issue with IDN %s" % other_idn)
+                    altquery = 'num=%s NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)' % other_idn
+                    altresults = self.execute_query(log, altquery, timeout)
+                    if altresults:
+                        book['alternative_xmls'].append(altresults[0])
+
 
                 ##### Field 264: "Production, Publication, Distribution, Manufacture, and Copyright Notice" #####
                 # Get Publisher Name, Publishing Location, Publishing Date
@@ -409,7 +297,7 @@ class DNB_DE(Source):
 
                         book['series'] = ' - '.join(series_parts)
                         log.info("[245] Series: %s" % book['series'])
-                        book['series'] = self.cleanUpSeries(log, book['series'], book['publisher_name'])
+                        book['series'] = self.clean_series(log, book['series'], book['publisher_name'])
 
                         # build series index
                         if code_n:
@@ -424,7 +312,7 @@ class DNB_DE(Source):
 
                     book['title'] = " : ".join(title_parts)
                     log.info("[245] Title: %s" % book['title'])
-                    book['title'] = self.cleanUpTitle(log, book['title'])
+                    book['title'] = self.clean_title(log, book['title'])
 
                 # Title_Sort
                 if title_parts:
@@ -479,54 +367,26 @@ class DNB_DE(Source):
 
 
                 ##### Field 856: "Electronic Location and Access" #####
-                # Get Comments
-                # Field contains a URL to an HTML file with the comments
-                try:
-                    url = record.xpath("./marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>21]", namespaces=ns)[0].text.strip()
-                    if url.startswith("http://deposit.dnb.de/") or url.startswith("https://deposit.dnb.de/"):
-                        br = self.browser
-                        log.info('[856.u] Trying to download Comments from: %s' % url)
-                        try:
-                            comments = br.open_novisit(url, timeout=30).read()
-                            comments = re.sub(
-                                b'(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)*(\s|<br>|<p>|\n)*', b'', comments, flags=re.IGNORECASE)
-                            book['comments'] = sanitize_comments_html(comments)
-                            log.info('[856.u] Got Comments: %s' % book['comments'])
-                        except Exception as e:
-                            log.info("[856.u] Could not download Comments from %s: %s" % (url, e))
-                except IndexError:
-                    pass
-
-                # If no comments are found for this edition, look at other editions of this book (Field 776: "Additional Physical Form Entry")
-                # Example: dnb-idb=1136409025
-                if not book['comments']:
-                    # get all other issues
-                    for i in record.xpath("./marc21:datafield[@tag='776']/marc21:subfield[@code='w' and string-length(text())>0]", namespaces=ns):
-                        other_idn = re.sub("^\(.*\)", "", i.text.strip())
-                        subquery = 'num=%s NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)' % other_idn
-                        subresults = self.getSearchResults(log, subquery, timeout)
-
-                        if not subresults:
-                            continue
-
-                        log.info("[776.w] Found other issue with IDN %s" % other_idn)
-                        for subrecord in subresults:
+                # Get Comments, either from this book or from one of its other "Physical Forms"
+                # Field contains an URL to an HTML file with the comments
+                # Example: dnb-idn:1256023949
+                for x in [record] + book['alternative_xmls']:
+                    try:
+                        url = x.xpath("./marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>21]", namespaces=ns)[0].text.strip()
+                        if url.startswith("http://deposit.dnb.de/") or url.startswith("https://deposit.dnb.de/"):
+                            br = self.browser
+                            log.info('[856.u] Trying to download Comments from: %s' % url)
                             try:
-                                url = subrecord.xpath("./marc21:datafield[@tag='856']/marc21:subfield[@code='u' and string-length(text())>21]", namespaces=ns)[0].text.strip()
-                                if url.startswith("http://deposit.dnb.de/") or url.startswith("https://deposit.dnb.de/"):
-                                    br = self.browser
-                                    log.info('[856.u] Trying to download other issues Comments from: %s' % url)
-                                    try:
-                                        comments = br.open_novisit(url, timeout=30).read()
-                                        comments = re.sub(
-                                            b'(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)*(\s|<br>|<p>|\n)*', b'', comments, flags=re.IGNORECASE)
-                                        book['comments'] = sanitize_comments_html(comments)
-                                        log.info('[856.u] Got other issues Comments: %s' % book['comments'])
-                                        break
-                                    except Exception as e:
-                                        log.info("[856.u] Could not download other issues Comments from %s: %s" % (url, e))
-                            except IndexError:
-                                pass
+                                comments = br.open_novisit(url, timeout=30).read()
+                                comments = re.sub(
+                                    b'(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)*(\s|<br>|<p>|\n)*', b'', comments, flags=re.IGNORECASE)
+                                book['comments'] = sanitize_comments_html(comments)
+                                log.info('[856.u] Got Comments: %s' % book['comments'])
+                                break
+                            except Exception as e:
+                                log.info("[856.u] Could not download Comments from %s: %s" % (url, e))
+                    except IndexError:
+                        pass
 
 
                 ##### Field 16: "National Bibliographic Agency Control Number" #####
@@ -592,7 +452,7 @@ class DNB_DE(Source):
                     attr_v = i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
 
                     # Assume we have "This great Seriestitle : Nr. 220"
-                    # -> Split at " : ", the part without digit is the series, the digits in the other part are the series_index
+                    # -> Split at " : ", the part without digits is the series, the digits in the other part are the series_index
                     parts = re.split(" : ", attr_v)
                     if len(parts) == 2:
                         if bool(re.search("\d", parts[0])) != bool(re.search("\d", parts[1])):
@@ -624,7 +484,7 @@ class DNB_DE(Source):
                         log.info("[490.a] Series: %s" % series)
 
                     if series:
-                        series = self.cleanUpSeries(log, series, book['publisher_name'])
+                        series = self.clean_series(log, series, book['publisher_name'])
 
                         if series and series_index:
                             book['series'] = series
@@ -645,7 +505,7 @@ class DNB_DE(Source):
                         log.info("[246.a] Series: %s" % series)
                         log.info("[246.a] Series_Index: %s" % book['series_index'])
 
-                        series = self.cleanUpSeries(log, match.group(1), book['publisher_name'])
+                        series = self.clean_series(log, match.group(1), book['publisher_name'])
 
                         if series and series_index:
                             book['series'] = series
@@ -669,7 +529,7 @@ class DNB_DE(Source):
                     series = i.xpath("./marc21:subfield[@code='t']", namespaces=ns)[0].text.strip()
                     log.info("[800.t] Series: %s" % series)
 
-                    series = self.cleanUpSeries(log, series, book['publisher_name'])
+                    series = self.clean_series(log, series, book['publisher_name'])
 
                     if series and series_index:
                         book['series'] = series
@@ -693,7 +553,7 @@ class DNB_DE(Source):
                     series = i.xpath("./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
                     log.info("[830.a] Series: %s" % series)
 
-                    series = self.cleanUpSeries(log, series, book['publisher_name'])
+                    series = self.clean_series(log, series, book['publisher_name'])
 
                     if series and series_index:
                         book['series'] = series
@@ -727,7 +587,7 @@ class DNB_DE(Source):
                         if len(i.text) < 2:
                             continue
 
-                        book['subjects_non_gnd'].extend(re.split(',|;', self.removeSortingCharacters(i.text)))
+                        book['subjects_non_gnd'].extend(re.split(',|;', self.remove_sorting_characters(i.text)))
 
                 if book['subjects_non_gnd']:
                     log.info("[600.a-655.a] Non-GND Subjects: %s" % " ".join(book['subjects_non_gnd']))
@@ -767,7 +627,7 @@ class DNB_DE(Source):
                     guessed_title = None
 
                     parts = re.split(
-                        "[:]", self.removeSortingCharacters(book['title']))
+                        "[:]", self.remove_sorting_characters(book['title']))
 
                     if len(parts) == 2:
                         # make sure only one part of the two parts contains digits
@@ -860,7 +720,7 @@ class DNB_DE(Source):
 
                     # store results
                     if guessed_series and guessed_series_index and guessed_title:
-                        book['title'] = self.cleanUpTitle(log, guessed_title)
+                        book['title'] = self.clean_title(log, guessed_title)
                         book['series'] = guessed_series
                         book['series_index'] = guessed_series_index
 
@@ -870,21 +730,52 @@ class DNB_DE(Source):
                     log.info("Extracted IDN does not match book's IDN, skipping record")
                     continue
 
+                ##### Figure out working URL to cover #####
+                # Cover URL is basically fixed and takes ISBN as an argument
+                # So get all ISBNs we have for this book...
+                cover_isbns = [ book['isbn'] ]
+                # loop through all alternative "physical forms"
+                for altxml in book['alternative_xmls']:
+                    for identifier in altxml.xpath("./marc21:datafield[@tag='020']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                        try:
+                            isbn_regex = "(?:ISBN(?:-1[03])?:? )?(?=[-0-9 ]{17}|[-0-9X ]{13}|[0-9X]{10})(?:97[89][- ]?)?[0-9]{1,5}[- ]?(?:[0-9]+[- ]?){2}[0-9X]"
+                            match = re.search(isbn_regex, identifier.text.strip())
+                            isbn = match.group()
+                            isbn = isbn.replace('-', '')
+                            log.info("[020.a ALTERNATE] Identifier ISBN: %s" % isbn)
+                            cover_isbns.append(isbn)
+                            self.cache_isbn_to_identifier(isbn, idn)
+                            break
+                        except AttributeError:
+                            pass
+
+                # ...and check for each ISBN if the server has a cover
+                for i in cover_isbns:
+                    url = self.COVERURL % i
+                    request = Request(url)
+                    request.get_method = lambda : 'HEAD'
+                    try:
+                        urlopen(request)
+                        self.cache_identifier_to_cover_url(idn, url)
+                        break
+                    except HTTPError:
+                        continue
+
 
                 ##### Put it all together #####
                 if self.cfg_append_edition_to_title == True and book['edition']:
                     book['title'] = book['title'] + " : " + book['edition']
 
-                authors = list(map(lambda i: self.removeSortingCharacters(i), book['authors']))
+                authors = list(map(lambda i: self.remove_sorting_characters(i), book['authors']))
 
                 mi = Metadata(
-                    self.removeSortingCharacters(book['title']),
+                    self.remove_sorting_characters(book['title']),
                     list(map(lambda i: re.sub("^(.+), (.+)$", r"\2 \1", i), authors))
                 )
 
                 mi.author_sort = " & ".join(authors)
 
-                mi.title_sort = self.removeSortingCharacters(book['title_sort'])
+                mi.title_sort = self.remove_sorting_characters(book['title_sort'])
 
                 if book['languages']:
                     mi.languages = book['languages']
@@ -892,15 +783,17 @@ class DNB_DE(Source):
 
                 mi.pubdate = book['pubdate']
                 mi.publisher = " ; ".join(filter(
-                    None, [book['publisher_location'], self.removeSortingCharacters(book['publisher_name'])]))
+                    None, [book['publisher_location'], self.remove_sorting_characters(book['publisher_name'])]))
 
                 if book['series']:
-                    mi.series = self.removeSortingCharacters(book['series'].replace(',', '.'))
+                    mi.series = self.remove_sorting_characters(book['series'].replace(',', '.'))
                     mi.series_index = book['series_index'] or "0"
 
                 mi.comments = book['comments']
 
-                mi.isbn = book['isbn']  # also required for cover download
+                mi.has_cover = self.cached_identifier_to_cover_url(book['idn']) is not None
+
+                mi.isbn = book['isbn']
                 mi.set_identifier('urn', book['urn'])
                 mi.set_identifier('dnb-idn', book['idn'])
                 mi.set_identifier('ddc', ",".join(book['ddc']))
@@ -940,8 +833,180 @@ class DNB_DE(Source):
             if query_success:
                 break
 
+
+    # Download Cover image - gets called directly from Calibre
+    def download_cover(self, log, result_queue, abort, title=None, authors=None, identifiers={}, timeout=30, get_best_cover=False):
+        cached_url = self.get_cached_cover_url(identifiers)
+        if cached_url is None:
+            log.info('No cached cover found, running identify')
+            rq = Queue()
+            self.identify(log, rq, abort, title=title,
+                          authors=authors, identifiers=identifiers)
+            if abort.is_set():
+                return
+
+            results = []
+            while True:
+                try:
+                    results.append(rq.get_nowait())
+                except Empty:
+                    break
+            results.sort(key=self.identify_results_keygen(
+                title=title, authors=authors, identifiers=identifiers))
+            for mi in results:
+                cached_url = self.get_cached_cover_url(mi.identifiers)
+                if cached_url is not None:
+                    break
+
+        if not cached_url:
+            log.info('No cover found')
+            return None
+
+        if abort.is_set():
+            return
+
+        br = self.browser
+        log('Downloading cover from:', cached_url)
+        try:
+            cdata = br.open_novisit(cached_url, timeout=timeout).read()
+            result_queue.put((self, cdata))
+        except Exception as e:
+            log.info("Could not download Cover, ERROR %s" % e)
+
+
+########################################
+    def create_query_variations(self, log, idn=None, isbn=None, authors=[], title=None):
+        queries = []
+
+        if idn:
+            # if IDN is given only search for the IDN and skip all the other stuff
+            queries.append('num=' + idn)
+        elif isbn:
+            # if ISBN is given only search for the ISBN and skip all the other stuff
+            queries.append('num=' + isbn)
+        else:
+
+            # create some variations of given authors
+            authors_v = []
+            if len(authors) > 0:
+                # simply use all authors
+                for a in authors:
+                    authors_v.append(authors)
+
+                # use all authors, one by one
+                if len(authors) > 1:
+                    for a in authors:
+                        authors_v.append([a])
+
+            # create some variations of given title
+            title_v = []
+            if title:
+                # simply use given title
+                title_v.append([ title ])
+
+                # remove some punctation characters
+                title_v.append([ ' '.join(self.get_title_tokens(
+                    title, strip_joiners=False, strip_subtitle=False))] )
+
+                # remove some punctation characters, joiners ("and", "und", "&", ...), leading zeros,  and single non-word characters
+                title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
+                    title, strip_joiners=True, strip_subtitle=False)) if (len(x)>1 or x.isnumeric())])
+
+                # remove subtitle (everything after " : ")
+                title_v.append([ ' '.join(self.get_title_tokens(
+                    title, strip_joiners=False, strip_subtitle=True))] )
+
+                # remove subtitle (everything after " : "), joiners ("and", "und", "&", ...), leading zeros, and single non-word characters
+                title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
+                    title, strip_joiners=True, strip_subtitle=True)) if (len(x)>1 or x.isnumeric())])
+
+            ## create queries
+            # title and author given:
+            if authors_v and title_v:
+
+                # try with title and all authors
+                queries.append('tst="%s" AND %s' % (
+                    title,
+                    " AND ".join(list(map(lambda x: 'per="%s"' % x, authors))),
+                ))
+
+                # try with cartiesian product of all authors and title variations created above
+                for a in authors_v:
+                    for t in title_v:
+                        queries.append(
+                            " AND ".join(
+                                list(map(lambda x: 'tit="%s"' % x.lstrip('0'), t)) +
+                                list(map(lambda x: 'per="%s"' % x, a))
+                         ))
+
+                # try with first author as title and title (without subtitle) as author
+                queries.append('per="%s" AND tit="%s"' % (
+                    ' '.join(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
+                    ' '.join(self.get_author_tokens(authors, only_first_author=True))
+                ))
+
+                # try with first author and title (without subtitle) in any index
+                queries.append(
+                    ' AND '.join(list(map(lambda x: '"%s"' % x, [
+                        " ".join(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)),
+                        " ".join(self.get_author_tokens(authors, only_first_author=True))
+                    ])))
+                )
+
+                # try with first author and splitted title words (without subtitle) in any index
+                queries.append(
+                    ' AND '.join(list(map(lambda x: '"%s"' % x.lstrip('0'),
+                                          list(x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)))
+                                          + list(self.get_author_tokens(authors, only_first_author=True))
+                                          )))
+                )
+
+            # authors given but no title
+            elif authors_v and not title_v:
+                # try with all authors as authors
+                for a in authors_v:
+                    queries.append(" AND ".join(list(map(lambda x: 'per="%s"' % x, a))))
+
+                # try with first author as author
+                queries.append('per="' + ' '.join(self.get_author_tokens(authors, only_first_author=True)) + '"')
+
+                # try with first author as title
+                queries.append('tit="' + ' '.join(x.lstrip('0') for x in self.get_author_tokens(authors, only_first_author=True)) + '"')
+
+            # title given but no author
+            elif not authors_v and title_v:
+                # try with title as title
+                for t in title_v:
+                    queries.append(
+                        " AND ".join(list(map(lambda x: 'tit="%s"' % x.lstrip('0'), t)))
+                    )
+                # try with title as author
+                queries.append('per="' + ' '.join(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)) + '"')
+
+                # try with title (without subtitle) in any index
+                queries.append(
+                    ' AND '.join(list(map(lambda x: '"%s"' % x, [
+                        " ".join(x.lstrip('0') for x in self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True))
+                    ])))
+                )
+
+        # remove duplicate queries (while keeping the order)
+        uniqueQueries = []
+        for i in queries:
+            if i not in uniqueQueries:
+                uniqueQueries.append(i)
+
+        if isbn:
+            uniqueQueries = [ i + ' AND num=' + isbn for i in uniqueQueries ]
+
+        # do not search in films, music, microfiches or audiobooks
+        uniqueQueries = [ i + ' NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)' for i in uniqueQueries ]
+
+        return uniqueQueries
+
+
     # remove sorting word markers
-    def removeSortingCharacters(self, text):
+    def remove_sorting_characters(self, text):
         if text:
             return ''.join([c for c in text if ord(c) != 152 and ord(c) != 156])
         else:
@@ -949,11 +1014,11 @@ class DNB_DE(Source):
 
 
     # clean up title
-    def cleanUpTitle(self, log, title):
+    def clean_title(self, log, title):
         if title:
             # remove name of translator from title
             match = re.search(
-                '^(.+) [/:] [Aa]us dem .+? von(\s\w+)+$', self.removeSortingCharacters(title))
+                '^(.+) [/:] [Aa]us dem .+? von(\s\w+)+$', self.remove_sorting_characters(title))
             if match:
                 title = match.group(1)
                 log.info("[Title Cleaning] Removed translator, title is now: %s" % title)
@@ -961,7 +1026,7 @@ class DNB_DE(Source):
 
 
     # clean up series
-    def cleanUpSeries(self, log, series, publisher_name):
+    def clean_series(self, log, series, publisher_name):
         if series:
             # series must at least contain a single character or digit
             match = re.search('[\w\d]', series)
@@ -980,7 +1045,7 @@ class DNB_DE(Source):
 
                 # Skip series info if it starts with the first word of the publisher's name (which must be at least 4 characters long)
                 match = re.search(
-                    '^(\w\w\w\w+)', self.removeSortingCharacters(publisher_name))
+                    '^(\w\w\w\w+)', self.remove_sorting_characters(publisher_name))
                 if match:
                     pubcompany = match.group(1)
                     if re.search('^\W*' + pubcompany, series, flags=re.IGNORECASE):
@@ -989,6 +1054,7 @@ class DNB_DE(Source):
 
             # do not accept some other unwanted series names
             # TODO: Has issues with Umlaus in regex (or series string?)
+            # TODO: Make user configurable
             for i in [
                 '^Roman$', '^Science-fiction$',
                 '^\[Ariadne\]$', '^Ariadne$', '^atb$', '^BvT$', '^Bastei L', '^bb$', '^Beck Paperback', '^Beck\-.*berater', '^Beck\'sche Reihe', '^Bibliothek Suhrkamp$', '^BLT$',
@@ -1013,8 +1079,11 @@ class DNB_DE(Source):
         return uniqueList
 
 
-    def getSearchResults(self, log, query, timeout=30):
-        log.info('Querying: %s' % query)
+    def execute_query(self, log, query, timeout=30):
+        # SRU does not work with "+" or "?" characters in query, so we simply remove them
+        query =  re.sub('[\+\?]', '', query)
+
+        log.info('Query String: %s' % query)
 
         queryUrl = self.QUERYURL % (quote(query.encode('utf-8')))
         log.info('Query URL: %s' % queryUrl)
@@ -1056,50 +1125,14 @@ class DNB_DE(Source):
     # Build Cover URL
     def get_cached_cover_url(self, identifiers):
         url = None
-        isbn = check_isbn(identifiers.get('isbn', None))
-        if not isbn:
-            return None
-        url = self.COVERURL % isbn
+        idn = identifiers.get('dnb-idn', None)
+        if idn is None:
+            isbn = identifiers.get('isbn', None)
+            if isbn is not None:
+                idn = self.cached_isbn_to_identifier(isbn)
+        if idn is not None:
+            url = self.cached_identifier_to_cover_url(idn)
         return url
-
-
-    # Download Cover image
-    def download_cover(self, log, result_queue, abort, title=None, authors=None, identifiers={}, timeout=30, get_best_cover=False):
-        cached_url = self.get_cached_cover_url(identifiers)
-        if not cached_url:
-            log.info('No cached cover found, running identify')
-            rq = Queue()
-            self.identify(log, rq, abort, title=title,
-                          authors=authors, identifiers=identifiers)
-            if abort.is_set():
-                return
-                results = []
-                while True:
-                    try:
-                        results.append(rq.get_nowait())
-                    except Empty:
-                        break
-                results.sort(key=self.identify_results_keygen(
-                    title=title, authors=authors, identifiers=identifiers))
-                for mi in results:
-                    cached_url = self.get_cached_cover_url(mi.identifiers)
-                    if cached_url:
-                        break
-
-        if not cached_url:
-            log.info('No cover found')
-            return None
-
-        if abort.is_set():
-            return
-
-        br = self.browser
-        log('Downloading cover from:', cached_url)
-        try:
-            cdata = br.open_novisit(cached_url, timeout=timeout).read()
-            result_queue.put((self, cdata))
-        except Exception as e:
-            log.info("Could not download Cover, ERROR %s" % e)
 
 
     # Convert ISO 639-2/B to ISO 639-3
@@ -1138,11 +1171,13 @@ class DNB_DE(Source):
     def strip_german_joiners(self, wordlist):
         tokens = []
         for word in wordlist:
-            if word.lower() not in ( 'ein', 'eine', 'einer', 'und', 'der', 'die', 'das'):
+            if word.lower() not in ( 'ein', 'eine', 'einer', 'der', 'die', 'das', 'und', 'oder'):
                 tokens.append(word)
         return tokens
 
 
+
+########################################
 if __name__ == '__main__':  # tests
     # To run these test use:
     # calibre-debug -e __init__.py
@@ -1151,8 +1186,19 @@ if __name__ == '__main__':  # tests
 
     test_identify_plugin(DNB_DE.name, [
         (
-            {'identifiers': {'isbn': '9783404285266'}},
-            [title_test('Sehnsucht des Herzens', exact=True),
-             authors_test(['Lucas, Joanne St.'])]
+            {'identifiers': {'isbn': '9783404285266'}}, 
+            [
+                title_test('der goblin-held', exact=True),
+                authors_test(['jim c. hines']),
+                series_test('Die Goblin-Saga / Jim C. Hines', '4'),
+            ], 
+        ), 
+        (
+            {'identifiers': {'dnb-idn': '1136409025'}},
+            [
+                title_test('Sehnsucht des Herzens', exact=True),
+                authors_test(['Lucas, Joanne St.']),
+                series_test('Die Goblin-Saga / Jim C. Hines', '4'),
+            ]
         ),
     ])
