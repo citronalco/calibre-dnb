@@ -50,7 +50,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 2, 2)
+    version = (3, 2, 3)
     minimum_calibre_version = (3, 48, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -63,7 +63,8 @@ class DNB_DE(Source):
     prefer_results_with_isbn = True
     ignore_ssl_errors = True
 
-    QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&maximumRecords=100&operation=searchRetrieve&recordSchema=MARC21-xml&query=%s'
+    MAXIMUMRECORDS = 10
+    QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&maximumRecords=%s&operation=searchRetrieve&recordSchema=MARC21-xml&query=%s'
     COVERURL = 'https://portal.dnb.de/opac/mvb/cover?isbn=%s'
 
     def load_config(self):
@@ -378,6 +379,11 @@ class DNB_DE(Source):
                             log.info('[856.u] Trying to download Comments from: %s' % url)
                             try:
                                 comments = br.open_novisit(url, timeout=30).read()
+
+                                # Skip service outage information web page
+                                if comments.decode('utf-8').find('Zugriff derzeit nicht möglich // Access currently unavailable') != -1:
+                                    raise Exception("Access currently unavailable")
+
                                 comments = re.sub(
                                     b'(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)*(\s|<br>|<p>|\n)*', b'', comments, flags=re.IGNORECASE)
                                 book['comments'] = sanitize_comments_html(comments)
@@ -1085,7 +1091,7 @@ class DNB_DE(Source):
 
         log.info('Query String: %s' % query)
 
-        queryUrl = self.QUERYURL % (quote(query.encode('utf-8')))
+        queryUrl = self.QUERYURL % (self.MAXIMUMRECORDS, quote(query.encode('utf-8')))
         log.info('Query URL: %s' % queryUrl)
 
         xmlData = None
