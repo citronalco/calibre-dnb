@@ -398,7 +398,8 @@ class DNB_DE(Source):
                 ##### Field 16: "National Bibliographic Agency Control Number" #####
                 # Get Identifier "IDN" (dnb-idn)
                 try:
-                    book['idn'] = record.xpath("./marc21:datafield[@tag='016']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                    idn = record.xpath("./marc21:datafield[@tag='016']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                    book['idn'] = idn
                     log.info("[016.a] Identifier IDN: %s" % book['idn'])
                 except IndexError:
                     pass
