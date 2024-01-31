@@ -750,7 +750,7 @@ class DNB_DE(Source):
                             isbn = isbn.replace('-', '')
                             log.info("[020.a ALTERNATE] Identifier ISBN: %s" % isbn)
                             cover_isbns.append(isbn)
-                            self.cache_isbn_to_identifier(isbn, idn)
+                            self.cache_isbn_to_identifier(isbn, book['idn'])
                             break
                         except AttributeError:
                             pass
@@ -762,7 +762,7 @@ class DNB_DE(Source):
                     request.get_method = lambda : 'HEAD'
                     try:
                         urlopen(request)
-                        self.cache_identifier_to_cover_url(idn, url)
+                        self.cache_identifier_to_cover_url(book['idn'], url)
                         break
                     except HTTPError:
                         continue
