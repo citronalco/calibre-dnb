@@ -385,7 +385,8 @@ class DNB_DE(Source):
                                     raise Exception("Access currently unavailable")
 
                                 comments = re.sub(
-                                    b'(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)*(\s|<br>|<p>|\n)*', b'', comments, flags=re.IGNORECASE)
+                                    r'(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)*(\s|<br>|<p>|\n)*',
+                                    '', comments, flags=re.IGNORECASE)
                                 book['comments'] = sanitize_comments_html(comments)
                                 log.info('[856.u] Got Comments: %s' % book['comments'])
                                 break
