@@ -50,7 +50,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 2, 4)
+    version = (3, 2, 5)
     minimum_calibre_version = (3, 48, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -145,7 +145,7 @@ class DNB_DE(Source):
                     'publisher_name': None,
                     'publisher_location': None,
 
-                    'alternative_xmls': [], 
+                    'alternative_xmls': [],
                 }
 
 
@@ -175,7 +175,7 @@ class DNB_DE(Source):
                 # Often only one of them contains comments or a cover
                 # Example: dnb-idb=1136409025
                 for i in record.xpath("./marc21:datafield[@tag='776']/marc21:subfield[@code='w' and string-length(text())>0]", namespaces=ns):
-                    other_idn = re.sub("^\(.*\)", "", i.text.strip())
+                    other_idn = re.sub(r"^\(.*\)", "", i.text.strip())
                     log.info("[776.w] Found other issue with IDN %s" % other_idn)
                     altquery = 'num=%s NOT (mat=film OR mat=music OR mat=microfiches OR cod=tt)' % other_idn
                     altresults = self.execute_query(log, altquery, timeout)
@@ -210,7 +210,7 @@ class DNB_DE(Source):
                     if not book['pubdate']:
                         try:
                             pubdate = field.xpath("./marc21:subfield[@code='c' and string-length(text())>=4]", namespaces=ns)[0].text.strip()
-                            match = re.search("(\d{4})", pubdate)
+                            match = re.search(r"(\d{4})", pubdate)
                             year = match.group(1)
                             book['pubdate'] = datetime.datetime(int(year), 1, 1, 12, 30, 0)
                             log.info("[264.c] Publication Year: %s" % book['pubdate'])
@@ -266,12 +266,12 @@ class DNB_DE(Source):
 
                     code_n = []
                     for i in field.xpath("./marc21:subfield[@code='n' and string-length(text())>0]", namespaces=ns):
-                        match = re.search("(\d+([,\.]\d+)?)", i.text.strip())
+                        match = re.search(r"(\d+([,\.]\d+)?)", i.text.strip())
                         if match:
                             code_n.append(match.group(1))
                         else:
                             # looks like sometimes DNB does not know the series_index and uses something like "[...]"
-                            match = re.search("\[\.\.\.\]", i.text.strip())
+                            match = re.search(r"\[\.\.\.\]", i.text.strip())
                             if match:
                                 code_n.append('0')
 
@@ -320,9 +320,9 @@ class DNB_DE(Source):
                     title_sort_parts = list(title_parts)
 
                     try:  # Python2
-                        title_sort_regex = re.match('^(.*?)(' + unichr(152) + '.*' + unichr(156) + ')?(.*?)$', title_parts[0])
+                        title_sort_regex = re.match(r'^(.*?)(' + unichr(152) + '.*' + unichr(156) + ')?(.*?)$', title_parts[0])
                     except:  # Python3
-                        title_sort_regex = re.match('^(.*?)(' + chr(152) + '.*' + chr(156) + ')?(.*?)$', title_parts[0])
+                        title_sort_regex = re.match(r'^(.*?)(' + chr(152) + '.*' + chr(156) + ')?(.*?)$', title_parts[0])
                     sortword = title_sort_regex.group(2)
                     if sortword:
                         title_sort_parts[0] = ''.join(filter(None, [title_sort_regex.group(1).strip(), title_sort_regex.group(3).strip(), ", " + sortword]))
@@ -338,7 +338,7 @@ class DNB_DE(Source):
                 # primary authors
                 primary_authors = []
                 for i in record.xpath("./marc21:datafield[@tag='100']/marc21:subfield[@code='4' and text()='aut']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                    name = re.sub(" \[.*\]$", "", i.text.strip())
+                    name = re.sub(r" \[.*\]$", "", i.text.strip())
                     primary_authors.append(name)
 
                 if primary_authors:
@@ -348,7 +348,7 @@ class DNB_DE(Source):
                 # secondary authors
                 secondary_authors = []
                 for i in record.xpath("./marc21:datafield[@tag='700']/marc21:subfield[@code='4' and text()='aut']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                    name = re.sub(" \[.*\]$", "", i.text.strip())
+                    name = re.sub(r" \[.*\]$", "", i.text.strip())
                     secondary_authors.append(name)
 
                 if secondary_authors:
@@ -359,7 +359,7 @@ class DNB_DE(Source):
                 if not book['authors']:
                     involved_persons = []
                     for i in record.xpath("./marc21:datafield[@tag='700']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
-                        name = re.sub(" \[.*\]$", "", i.text.strip())
+                        name = re.sub(r" \[.*\]$", "", i.text.strip())
                         involved_persons.append(name)
 
                     if involved_persons:
@@ -409,7 +409,7 @@ class DNB_DE(Source):
                 for i in record.xpath("./marc21:datafield[@tag='024']/marc21:subfield[@code='2' and text()='urn']/../marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     try:
                         urn = i.text.strip()
-                        match = re.search("^urn:(.+)$", urn)
+                        match = re.search(r"^urn:(.+)$", urn)
                         book['urn'] = match.group(1)
                         log.info("[024.a] Identifier URN: %s" % book['urn'])
                         break
@@ -461,16 +461,16 @@ class DNB_DE(Source):
                     # -> Split at " : ", the part without digits is the series, the digits in the other part are the series_index
                     parts = re.split(" : ", attr_v)
                     if len(parts) == 2:
-                        if bool(re.search("\d", parts[0])) != bool(re.search("\d", parts[1])):
+                        if bool(re.search(r"\d", parts[0])) != bool(re.search(r"\d", parts[1])):
                             # figure out which part contains the index number
-                            if bool(re.search("\d", parts[0])):
+                            if bool(re.search(r"\d", parts[0])):
                                 indexpart = parts[0]
                                 textpart = parts[1]
                             else:
                                 indexpart = parts[1]
                                 textpart = parts[0]
 
-                            match = re.search("(\d+[,\.\d+]?)", indexpart)
+                            match = re.search(r"(\d+[,\.\d+]?)", indexpart)
                             if match:
                                 series_index = match.group(1)
                                 series = textpart.strip()
@@ -479,7 +479,7 @@ class DNB_DE(Source):
 
                     else:
                         # Assumption above was wrong. Try to extract at least the series_index
-                        match = re.search("(\d+[,\.\d+]?)", attr_v)
+                        match = re.search(r"(\d+[,\.\d+]?)", attr_v)
                         if match:
                             series_index = match.group(1)
                             log.info("[490.v] Series_Index: %s" % series_index)
@@ -504,7 +504,7 @@ class DNB_DE(Source):
                     if book['series'] and book['series_index'] and book['series_index'] != "0":
                         break
 
-                    match = re.search("^(.+?) ; (\d+[,\.\d+]?)$", i.text.strip())
+                    match = re.search(r"^(.+?) ; (\d+[,\.\d+]?)$", i.text.strip())
                     if match:
                         series = match.group(1)
                         series_index = match.group(2)
@@ -526,7 +526,7 @@ class DNB_DE(Source):
                         break
 
                     # Series Index
-                    match = re.search("(\d+[,\.\d+]?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
+                    match = re.search(r"(\d+[,\.\d+]?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
                     if match:
                         series_index = match.group(1)
                         log.info("[800.v] Series_Index: %s" % series_index)
@@ -550,7 +550,7 @@ class DNB_DE(Source):
                         break
 
                     # Series Index
-                    match = re.search("(\d+[,\.\d+]?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
+                    match = re.search(r"(\d+[,\.\d+]?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
                     if match:
                         series_index = match.group(1)
                         log.info("[830.v] Series_Index: %s" % series_index)
@@ -637,10 +637,10 @@ class DNB_DE(Source):
 
                     if len(parts) == 2:
                         # make sure only one part of the two parts contains digits
-                        if bool(re.search("\d", parts[0])) != bool(re.search("\d", parts[1])):
+                        if bool(re.search(r"\d", parts[0])) != bool(re.search(r"\d", parts[1])):
 
                             # call the part with the digits "indexpart" as it contains the series_index, the one without digits "textpart"
-                            if bool(re.search("\d", parts[0])):
+                            if bool(re.search(r"\d", parts[0])):
                                 indexpart = parts[0]
                                 textpart = parts[1]
                             else:
@@ -649,13 +649,13 @@ class DNB_DE(Source):
 
                             # remove odd characters from start and end of the textpart
                             match = re.match(
-                                "^[\s\-–—:]*(.+?)[\s\-–—:]*$", textpart)
+                                r"^[\s\-–—:]*(.+?)[\s\-–—:]*$", textpart)
                             if match:
                                 textpart = match.group(1)
 
                             # if indexparts looks like "Name of the series - Episode 2": extract series and series_index
                             match = re.match(
-                                "^\s*(\S\D*?[a-zA-Z]\D*?)\W[\(\/\.,\s\-–—:]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?|Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", indexpart)
+                                r"^\s*(\S\D*?[a-zA-Z]\D*?)\W[\(\/\.,\s\-–—:]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?|Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", indexpart)
                             if match:
                                 guessed_series_index = match.group(2)
                                 guessed_series = match.group(1)
@@ -672,7 +672,7 @@ class DNB_DE(Source):
                             else:
                                 # if indexpart looks like "Episode 2 Name of the series": extract series and series_index
                                 match = re.match(
-                                    "^\s*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*(\S\D*?[a-zA-Z]\D*?)[\/\.,\-–—\s]*$", indexpart)
+                                    r"^\s*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*(\S\D*?[a-zA-Z]\D*?)[\/\.,\-–—\s]*$", indexpart)
                                 if match:
                                     guessed_series_index = match.group(1)
                                     guessed_series = match.group(2)
@@ -689,13 +689,13 @@ class DNB_DE(Source):
                                 else:
                                     # if indexpart looks like "Band 2": extract series_index
                                     match = re.match(
-                                        "^[\s\(]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*[\/\.,\-–—\s]*$", indexpart)
+                                        r"^[\s\(]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*[\/\.,\-–—\s]*$", indexpart)
                                     if match:
                                         guessed_series_index = match.group(1)
 
                                         # if textpart looks like "Name of the Series - Book Title": extract series and title
                                         match = re.match(
-                                            "^\s*(\w+.+?)\s?[\.;\-–:]+\s(\w+.+)\s*$", textpart)
+                                            r"^\s*(\w+.+?)\s?[\.;\-–:]+\s(\w+.+)\s*$", textpart)
                                         if match:
                                             guessed_series = match.group(1)
                                             guessed_title = match.group(2)
@@ -705,7 +705,7 @@ class DNB_DE(Source):
                     elif len(parts) == 1:
                         # if title looks like: "Name of the series - Title (Episode 2)"
                         match = re.match(
-                            "^\s*(\S.+?) \- (\S.+?) [\(\/\.,\s\-–:](?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", parts[0])
+                            r"^\s*(\S.+?) \- (\S.+?) [\(\/\.,\s\-–:](?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", parts[0])
                         if match:
                             guessed_series_index = match.group(3)
                             guessed_series = match.group(1)
@@ -716,7 +716,7 @@ class DNB_DE(Source):
                         else:
                             # if title looks like "Name of the series - Episode 2"
                             match = re.match(
-                                "^\s*(\S.+?)[\(\/\.,\s\-–—:]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", parts[0])
+                                r"^\s*(\S.+?)[\(\/\.,\s\-–—:]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", parts[0])
                             if match:
                                 guessed_series_index = match.group(2)
                                 guessed_series = match.group(1)
@@ -776,7 +776,7 @@ class DNB_DE(Source):
 
                 mi = Metadata(
                     self.remove_sorting_characters(book['title']),
-                    list(map(lambda i: re.sub("^(.+), (.+)$", r"\2 \1", i), authors))
+                    list(map(lambda i: re.sub(r"^(.+), (.+)$", r"\2 \1", i), authors))
                 )
 
                 mi.author_sort = " & ".join(authors)
@@ -1024,7 +1024,7 @@ class DNB_DE(Source):
         if title:
             # remove name of translator from title
             match = re.search(
-                '^(.+) [/:] [Aa]us dem .+? von(\s\w+)+$', self.remove_sorting_characters(title))
+                r'^(.+) [/:] [Aa]us dem .+? von(\s\w+)+$', self.remove_sorting_characters(title))
             if match:
                 title = match.group(1)
                 log.info("[Title Cleaning] Removed translator, title is now: %s" % title)
@@ -1035,7 +1035,7 @@ class DNB_DE(Source):
     def clean_series(self, log, series, publisher_name):
         if series:
             # series must at least contain a single character or digit
-            match = re.search('[\w\d]', series)
+            match = re.search(r'[\w\d]', series)
             if not match:
                 return None
 
@@ -1051,10 +1051,10 @@ class DNB_DE(Source):
 
                 # Skip series info if it starts with the first word of the publisher's name (which must be at least 4 characters long)
                 match = re.search(
-                    '^(\w\w\w\w+)', self.remove_sorting_characters(publisher_name))
+                    r'^(\w\w\w\w+)', self.remove_sorting_characters(publisher_name))
                 if match:
                     pubcompany = match.group(1)
-                    if re.search('^\W*' + pubcompany, series, flags=re.IGNORECASE):
+                    if re.search(r'^\W*' + pubcompany, series, flags=re.IGNORECASE):
                         log.info("[Series Cleaning] Series %s starts with publisher, ignoring" % series)
                         return None
 
@@ -1062,13 +1062,13 @@ class DNB_DE(Source):
             # TODO: Has issues with Umlaus in regex (or series string?)
             # TODO: Make user configurable
             for i in [
-                '^Roman$', '^Science-fiction$',
-                '^\[Ariadne\]$', '^Ariadne$', '^atb$', '^BvT$', '^Bastei L', '^bb$', '^Beck Paperback', '^Beck\-.*berater', '^Beck\'sche Reihe', '^Bibliothek Suhrkamp$', '^BLT$',
-                '^DLV-Taschenbuch$', '^Edition Suhrkamp$', '^Edition Lingen Stiftung$', '^Edition C', '^Edition Metzgenstein$', '^ETB$', '^dtv', '^Ein Goldmann',
-                '^Oettinger-Taschenbuch$', '^Haymon-Taschenbuch$', '^Mira Taschenbuch$', '^Suhrkamp-Taschenbuch$', '^Bastei-L', '^Hey$', '^btb$', '^bt-Kinder', '^Ravensburger',
-                '^Sammlung Luchterhand$', '^blanvalet$', '^KiWi$', '^Piper$', '^C.H. Beck', '^Rororo', '^Goldmann$', '^Moewig$', '^Fischer Klassik$', '^hey! shorties$', '^Ullstein',
-                '^Unionsverlag', '^Ariadne-Krimi', '^C.-Bertelsmann', '^Phantastische Bibliothek$', '^Beck Paperback$', '^Beck\'sche Reihe$', '^Knaur', '^Volk-und-Welt',
-                '^Allgemeine', '^Premium', '^Horror-Bibliothek$']:
+                r'^Roman$', r'^Science-fiction$',
+                r'^\[Ariadne\]$', r'^Ariadne$', r'^atb$', r'^BvT$', r'^Bastei L', r'^bb$', r'^Beck Paperback', r'^Beck\-.*berater', r'^Beck\'sche Reihe', r'^Bibliothek Suhrkamp$', r'^BLT$',
+                r'^DLV-Taschenbuch$', r'^Edition Suhrkamp$', r'^Edition Lingen Stiftung$', r'^Edition C', r'^Edition Metzgenstein$', r'^ETB$', r'^dtv', r'^Ein Goldmann',
+                r'^Oettinger-Taschenbuch$', r'^Haymon-Taschenbuch$', r'^Mira Taschenbuch$', r'^Suhrkamp-Taschenbuch$', r'^Bastei-L', r'^Hey$', r'^btb$', r'^bt-Kinder', r'^Ravensburger',
+                r'^Sammlung Luchterhand$', r'^blanvalet$', r'^KiWi$', r'^Piper$', r'^C.H. Beck', r'^Rororo$', r'^Goldmann$', r'^Moewig$', r'^Fischer Klassik$', r'^hey! shorties$', r'^Ullstein',
+                r'^Unionsverlag', r'^Ariadne-Krimi', r'^C.-Bertelsmann', r'^Phantastische Bibliothek$', r'^Beck Paperback$', r'^Beck\'sche Reihe$', r'^Knaur', r'^Volk-und-Welt',
+                r'^Allgemeine', r'^Premium', r'^Horror-Bibliothek$']:
                 if re.search(i, series, flags=re.IGNORECASE):
                     log.info("[Series Cleaning] Series %s contains unwanted string %s, ignoring" % (series, i))
                     return None
@@ -1087,7 +1087,7 @@ class DNB_DE(Source):
 
     def execute_query(self, log, query, timeout=30):
         # SRU does not work with "+" or "?" characters in query, so we simply remove them
-        query =  re.sub('[\+\?]', '', query)
+        query =  re.sub(r"[\+\?]", '', query)
 
         log.info('Query String: %s' % query)
 
