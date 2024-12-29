@@ -380,14 +380,18 @@ class DNB_DE(Source):
                             try:
                                 comments = br.open_novisit(url, timeout=30).read()
 
+                                # Decode bytes to string for processing
+                                comments_text = comments.decode('utf-8')
+
                                 # Skip service outage information web page
-                                if comments.decode('utf-8').find('Zugriff derzeit nicht möglich // Access currently unavailable') != -1:
+                                if 'Zugriff derzeit nicht möglich // Access currently unavailable' in comments_text:
                                     raise Exception("Access currently unavailable")
 
-                                comments = re.sub(
+                                # Process the text version
+                                comments_text = re.sub(
                                     r'(\s|<br>|<p>|\n)*Angaben aus der Verlagsmeldung(\s|<br>|<p>|\n)*(<h3>.*?</h3>)*(\s|<br>|<p>|\n)*',
-                                    '', comments, flags=re.IGNORECASE)
-                                book['comments'] = sanitize_comments_html(comments)
+                                    '', comments_text, flags=re.IGNORECASE)
+                                book['comments'] = sanitize_comments_html(comments_text)
                                 log.info('[856.u] Got Comments: %s' % book['comments'])
                                 break
                             except Exception as e:
