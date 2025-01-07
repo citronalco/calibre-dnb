@@ -12,37 +12,29 @@ __license__ = 'GPL v3'
 __copyright__ = '2017, Bernhard Geier <geierb@geierb.de>'
 __docformat__ = 'en'
 
+import re
+import datetime
+
+try:
+    # Python 2
+    from urllib import quote
+    from urllib2 import Request, urlopen, HTTPError
+    from Queue import Queue, Empty
+except ImportError:
+    # Python3
+    from urllib.parse import quote
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
+    from queue import Queue, Empty
+
+from lxml import etree
+
 from calibre.ebooks.metadata.sources.base import Source
 from calibre.ebooks.metadata import check_isbn
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.library.comments import sanitize_comments_html
 from calibre.utils.localization import lang_as_iso639_1
 from calibre.ebooks import normalize
-
-import re
-import datetime
-
-try:
-    from urllib import quote  # Python2
-except ImportError:
-    from urllib.parse import quote  # Python3
-
-from lxml import etree
-
-try:
-    from Queue import Queue, Empty  # Python2
-except ImportError:
-    from queue import Queue, Empty  # Python3
-
-try:
-    # Python 2
-    from urllib2 import Request, urlopen,  HTTPError
-except ImportError:
-    # Python 3
-    from urllib.request import Request, urlopen
-    from urllib.error import HTTPError
-
-
 
 class DNB_DE(Source):
     name = 'DNB_DE'
@@ -68,7 +60,9 @@ class DNB_DE(Source):
     COVERURL = 'https://portal.dnb.de/opac/mvb/cover?isbn=%s'
 
     def load_config(self):
-        # Config settings
+        """
+        Load config settings
+        """
         import calibre_plugins.DNB_DE.config as cfg
         self.cfg_guess_series = cfg.plugin_prefs[cfg.STORE_NAME].get(
             cfg.KEY_GUESS_SERIES, False)
@@ -85,11 +79,14 @@ class DNB_DE(Source):
     def is_customizable(self):
         return True
 
-    def identify(self, log, result_queue, abort, title=None, authors=[], identifiers={}, timeout=30):
+    def identify(self, log, result_queue, abort, title=None, authors=None, identifiers=None, timeout=30):
         self.load_config()
 
         if authors is None:
             authors = []
+
+        if identifiers is None:
+            identifiers = {}
 
         # get identifying tags from book
         idn = identifiers.get('dnb-idn', None)
@@ -774,7 +771,7 @@ class DNB_DE(Source):
 
 
                 ##### Put it all together #####
-                if self.cfg_append_edition_to_title == True and book['edition']:
+                if self.cfg_append_edition_to_title and book['edition']:
                     book['title'] = book['title'] + " : " + book['edition']
 
                 authors = list(map(lambda i: self.remove_sorting_characters(i), book['authors']))
@@ -845,8 +842,14 @@ class DNB_DE(Source):
                 break
 
 
-    # Download Cover image - gets called directly from Calibre
-    def download_cover(self, log, result_queue, abort, title=None, authors=None, identifiers={}, timeout=30, get_best_cover=False):
+    def download_cover(self, log, result_queue, abort, title=None, authors=None, identifiers=None, timeout=30, get_best_cover=False):
+        """
+        Download Cover image
+        gets called directly from Calibre
+        """
+        if identifiers is None:
+            identifiers = {}
+
         cached_url = self.get_cached_cover_url(identifiers)
         if cached_url is None:
             log.info('No cached cover found, running identify')
@@ -885,8 +888,13 @@ class DNB_DE(Source):
             log.info("Could not download Cover, ERROR %s" % e)
 
 
-########################################
-    def create_query_variations(self, log, idn=None, isbn=None, authors=[], title=None):
+    def create_query_variations(self, log, idn=None, isbn=None, authors=None, title=None):
+        """
+        Create a number of SRU query variations, with increasing fuzziness
+        """
+        if authors is None:
+            authors = []
+
         queries = []
 
         if idn:
@@ -1016,16 +1024,19 @@ class DNB_DE(Source):
         return uniqueQueries
 
 
-    # remove sorting word markers
     def remove_sorting_characters(self, text):
+        """
+        Remove sorting word markers
+        """
         if text:
             return ''.join([c for c in text if ord(c) != 152 and ord(c) != 156])
-        else:
-            return None
+        return None
 
 
-    # clean up title
     def clean_title(self, log, title):
+        """
+        Clean up title
+        """
         if title:
             # remove name of translator from title
             match = re.search(
@@ -1036,8 +1047,10 @@ class DNB_DE(Source):
         return title
 
 
-    # clean up series
     def clean_series(self, log, series, publisher_name):
+        """
+        Clean up series
+        """
         if series:
             # series must at least contain a single character or digit
             match = re.search(r'[\w\d]', series)
@@ -1080,8 +1093,10 @@ class DNB_DE(Source):
         return series
 
 
-    # remove duplicates from list
     def uniq(self, listWithDuplicates):
+        """
+        Remove duplicates from a list
+        """
         uniqueList = []
         if len(listWithDuplicates) > 0:
             for i in listWithDuplicates:
@@ -1091,6 +1106,9 @@ class DNB_DE(Source):
 
 
     def execute_query(self, log, query, timeout=30):
+        """
+        Query DNB SRU API
+        """
         # SRU does not work with "+" or "?" characters in query, so we simply remove them
         query =  re.sub(r"[\+\?]", '', query)
 
@@ -1133,8 +1151,10 @@ class DNB_DE(Source):
                 return None
 
 
-    # Build Cover URL
     def get_cached_cover_url(self, identifiers):
+        """
+        Create URL to cover image
+        """
         url = None
         idn = identifiers.get('dnb-idn', None)
         if idn is None:
@@ -1146,9 +1166,11 @@ class DNB_DE(Source):
         return url
 
 
-    # Convert ISO 639-2/B to ISO 639-3
     def iso639_2b_as_iso639_3(self, lang):
-        # Most codes in ISO 639-2/B are the same as in ISO 639-3. This are the exceptions:
+        """
+        Convert ISO 639-2/B to ISO 639-3
+        """
+        #  Most codes in ISO 639-2/B are the same as in ISO 639-3. This are the exceptions:
         mapping = {
             'alb': 'sqi',
             'arm': 'hye',
@@ -1177,9 +1199,11 @@ class DNB_DE(Source):
             return lang
 
 
-    # Remove German joiners from list of words
-    # By default, Calibre's function "get_title_tokens(...,strip_joiners=True,...)" only removes "a", "and", "the", "&"
     def strip_german_joiners(self, wordlist):
+        """
+        Remove German joiners from list of words
+        By default, Calibre's function "get_title_tokens(...,strip_joiners=True,...)" only removes "a", "and", "the", "&"
+        """
         tokens = []
         for word in wordlist:
             if word.lower() not in ( 'ein', 'eine', 'einer', 'der', 'die', 'das', 'und', 'oder'):
@@ -1188,7 +1212,6 @@ class DNB_DE(Source):
 
 
 
-########################################
 if __name__ == '__main__':  # tests
     # To run these test use:
     # calibre-debug -e __init__.py
@@ -1197,13 +1220,13 @@ if __name__ == '__main__':  # tests
 
     test_identify_plugin(DNB_DE.name, [
         (
-            {'identifiers': {'isbn': '9783404285266'}}, 
+            {'identifiers': {'isbn': '9783404285266'}},
             [
                 title_test('der goblin-held', exact=True),
                 authors_test(['jim c. hines']),
                 series_test('Die Goblin-Saga / Jim C. Hines', '4'),
-            ], 
-        ), 
+            ],
+        ),
         (
             {'identifiers': {'dnb-idn': '1136409025'}},
             [

@@ -33,6 +33,9 @@ plugin_prefs.defaults[STORE_NAME] = DEFAULT_STORE_VALUES
 
 class ConfigWidget(DefaultConfigWidget):
     def __init__(self, plugin):
+        """
+        Show configuration widget
+        """
         DefaultConfigWidget.__init__(self, plugin)
         c = plugin_prefs[STORE_NAME]
 
@@ -90,6 +93,9 @@ class ConfigWidget(DefaultConfigWidget):
             other_group_box_layout.addWidget(radio, 2 + i, 1, 1, 1)
 
     def commit(self):
+        """
+        Save settings
+        """
         DefaultConfigWidget.commit(self)
         new_prefs = {}
         new_prefs[KEY_GUESS_SERIES] = self.guess_series_checkbox.isChecked()
