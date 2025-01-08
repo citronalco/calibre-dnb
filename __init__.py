@@ -106,7 +106,6 @@ class DNB_DE(Source):
                 "This plugin requires at least either ISBN, IDN, Title or Author(s).")
             return None
 
-
         # process queries
         results = None
         query_success = False
@@ -217,11 +216,8 @@ class DNB_DE(Source):
 
                 ##### Field 245: "Title Statement" #####
                 # Get Title, Series, Series_Index, Subtitle
-                # Subfields:
-                # a: title
-                # b: subtitle 1
-                # n: number of part
-                # p: name of part
+                # Subfields: a: title, b: subtitle 1, n: number of part, p: name of part
+                # See: https://www.loc.gov/marc/bibliographic/bd245.html
 
                 # Examples:
                 # a = "The Endless Book", n[0] = 2, p[0] = "Second Season", n[1] = 3, p[1] = "Summertime", n[2] = 4, p[2] = "The Return of Foobar"	Example: dnb-id 1008774839
@@ -456,7 +452,7 @@ class DNB_DE(Source):
                     series = None
                     series_index = None
 
-                    # "v" is either "Nr. 220" or "This great Seriestitle : Nr. 220"
+                    # "v" is something like "Nr. 220", "220", "This great Seriestitle : Nr. 220", "Bd. 220, Abth. 1 = [1]"
                     attr_v = i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip()
 
                     # Assume we have "This great Seriestitle : Nr. 220"
@@ -472,7 +468,7 @@ class DNB_DE(Source):
                                 indexpart = parts[1]
                                 textpart = parts[0]
 
-                            match = re.search(r"(\d+[,\.\d+]?)", indexpart)
+                            match = re.search(r"^.*?(\d+[\.,]?(?:(?<=[\.,])\d*)?)", indexpart)
                             if match:
                                 series_index = match.group(1)
                                 series = textpart.strip()
@@ -481,7 +477,8 @@ class DNB_DE(Source):
 
                     else:
                         # Assumption above was wrong. Try to extract at least the series_index
-                        match = re.search(r"(\d+[,\.\d+]?)", attr_v)
+                        match = re.search(r"^.*?(\d+[\.,]?(?:(?<=[\.,])\d*)?)", attr_v)
+
                         if match:
                             series_index = match.group(1)
                             log.info("[490.v] Series_Index: %s" % series_index)
@@ -506,7 +503,7 @@ class DNB_DE(Source):
                     if book['series'] and book['series_index'] and book['series_index'] != "0":
                         break
 
-                    match = re.search(r"^(.+?) ; (\d+[,\.\d+]?)$", i.text.strip())
+                    match = re.search(r"^(.+?) ; (\d+[\.,]?(?:(?<=[\.,])\d*)?)$", i.text.strip())
                     if match:
                         series = match.group(1)
                         series_index = match.group(2)
@@ -528,7 +525,7 @@ class DNB_DE(Source):
                         break
 
                     # Series Index
-                    match = re.search(r"(\d+[,\.\d+]?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
+                    match = re.search(r"^.*?(\d+[\.,]?(?:(?<=[\.,])\d*)?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
                     if match:
                         series_index = match.group(1)
                         log.info("[800.v] Series_Index: %s" % series_index)
@@ -552,7 +549,7 @@ class DNB_DE(Source):
                         break
 
                     # Series Index
-                    match = re.search(r"(\d+[,\.\d+]?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
+                    match = re.search(r"^.*?(\d+[\.,]?(?:(?<=[\.,])\d*)?)", i.xpath("./marc21:subfield[@code='v']", namespaces=ns)[0].text.strip())
                     if match:
                         series_index = match.group(1)
                         log.info("[830.v] Series_Index: %s" % series_index)
