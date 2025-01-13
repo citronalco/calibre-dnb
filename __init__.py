@@ -152,7 +152,7 @@ class DNB_DE(Source):
                     mediatype = record.xpath("./marc21:datafield[@tag='336']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip().lower()
                     if mediatype in ('gesprochenes wort'):
                         continue
-                except:
+                except IndexError:
                     pass
 
 
@@ -162,7 +162,7 @@ class DNB_DE(Source):
                     mediatype = record.xpath("./marc21:datafield[@tag='337']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip().lower()
                     if mediatype in ('audio', 'video'):
                         continue
-                except:
+                except IndexError:
                     pass
 
 
