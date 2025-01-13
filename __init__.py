@@ -1213,23 +1213,55 @@ if __name__ == '__main__':  # tests
     # To run these test use:
     # calibre-debug -e __init__.py
     from calibre.ebooks.metadata.sources.test import (
-        test_identify_plugin, title_test, authors_test, series_test)
+        test_identify_plugin, title_test, authors_test, series_test, comments_test, pubdate_test, isbn_test, tags_test)
 
     test_identify_plugin(DNB_DE.name, [
         (
+            # generic search
+            {'authors': ['piketty'], 'title': 'kapital im 21. jahrhundert'},
+            [
+                title_test('das kapital im 21. jahrhundert'),
+                authors_test(['thomas piketty']),
+            ],
+        ),
+        (
+            # search by ISBN, series extraction
             {'identifiers': {'isbn': '9783404285266'}},
             [
                 title_test('der goblin-held', exact=True),
                 authors_test(['jim c. hines']),
                 series_test('Die Goblin-Saga / Jim C. Hines', '4'),
+                pubdate_test(2009, 1, 1),
             ],
         ),
         (
-            {'identifiers': {'dnb-idn': '1136409025'}},
+            # search by dnb-idn, tags and comments extraction
+            {'identifiers': {'dnb-idn': '1207331961'}},
             [
-                title_test('Sehnsucht des Herzens', exact=True),
-                authors_test(['Lucas, Joanne St.']),
-                series_test('Die Goblin-Saga / Jim C. Hines', '4'),
+                isbn_test('9783492303279'),
+                title_test('Der Report der Magd : Roman', exact=True),
+                authors_test(['Margaret Atwood']),
+                pubdate_test(2020, 1, 1),
+                tags_test(['moderner klassiker', 'hoffnung', 'das herz kommt zuletzt', 'the handmaid', 'volker schlöndorff',
+                           'die geschichte der dienerin', 'erzählende literatur: gegenwartsliteratur ab 1945', 'aldous huxley',
+                           'oryx und crake', 'totalitärer staat', 'dystopie', 'unterdrückung', 'george orwell', "handmaid's tale",
+                           'hexensaat', 'usa', 'zukunft', 'kultbuch', 'frau']),
+                comments_test('Die provozierende Vision eines totalitären Staats: Nach einer atomaren Verseuchung ist ein großer ' \
+                              'Teil der weiblichen Bevölkerung unfruchtbar. Die Frauen werden entmündigt und in drei Gruppen ' \
+                              'eingeteilt: Ehefrauen von Führungskräften, Dienerinnen und Mägde. Letztere werden zur Fortpflanzung ' \
+                              'rekrutiert und sollen für unfruchtbare Ehefrauen Kinder empfangen. Auch die Magd Desfred wird Opfer ' \
+                              'dieses entwürdigenden Programms. Doch sie besitzt etwas, was ihr alle Machthaber, Wächter und Spione ' \
+                              'nicht nehmen können, nämlich ihre Hoffnung auf ein Entkommen, auf Liebe, auf Leben ...'),
             ]
         ),
-    ])
+        (
+            # extract comments from other issue, author with unicode characters
+            {'identifiers': {'dnb-idn': '1256023949'}},
+            [
+                title_test('Der Rabbiner ohne Schuh : Kuriositäten aus meinem fast koscheren Leben'),
+                authors_test(['Barbara Bišický-Ehrlich']),
+                comments_test('Der beste Frisör der Welt, Rinderzunge zum Frühstück, ein Rabbiner ohne Schuhe und über allem die Frage, was Karel Gott auf ihrer Hochzeit zu suchen hatte'),
+            ],
+        ),
+
+    ],fail_missing_meta=False)
