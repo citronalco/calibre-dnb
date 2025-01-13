@@ -1055,8 +1055,7 @@ class DNB_DE(Source):
                 return None
 
             # remove sorting word markers
-            series = ''.join(
-                [c for c in series if ord(c) != 152 and ord(c) != 156])
+            series = self.remove_sorting_characters(series)
 
             # do not accept publisher name as series
             if publisher_name:
