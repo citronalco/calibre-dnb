@@ -36,6 +36,8 @@ from calibre.library.comments import sanitize_comments_html
 from calibre.utils.localization import lang_as_iso639_1
 from calibre.ebooks import normalize
 
+from calibre_plugins.DNB_DE.helper import clean_series, uniq, remove_sorting_characters, clean_title, iso639_2b_as_iso639_3, strip_german_joiners
+
 class DNB_DE(Source):
     name = 'DNB_DE'
     description = _(
@@ -291,7 +293,7 @@ class DNB_DE(Source):
 
                         book['series'] = ' - '.join(series_parts)
                         log.info("[245] Series: %s" % book['series'])
-                        book['series'] = self.clean_series(log, book['series'], book['publisher_name'])
+                        book['series'] = clean_series(log, book['series'], book['publisher_name'])
 
                         # build series index
                         if code_n:
@@ -306,7 +308,7 @@ class DNB_DE(Source):
 
                     book['title'] = " : ".join(title_parts)
                     log.info("[245] Title: %s" % book['title'])
-                    book['title'] = self.clean_title(log, book['title'])
+                    book['title'] = clean_title(log, book['title'])
 
                 # Title_Sort
                 if title_parts:
@@ -489,7 +491,7 @@ class DNB_DE(Source):
                         log.info("[490.a] Series: %s" % series)
 
                     if series:
-                        series = self.clean_series(log, series, book['publisher_name'])
+                        series = clean_series(log, series, book['publisher_name'])
 
                         if series and series_index:
                             book['series'] = series
@@ -510,7 +512,7 @@ class DNB_DE(Source):
                         log.info("[246.a] Series: %s" % series)
                         log.info("[246.a] Series_Index: %s" % book['series_index'])
 
-                        series = self.clean_series(log, match.group(1), book['publisher_name'])
+                        series = clean_series(log, match.group(1), book['publisher_name'])
 
                         if series and series_index:
                             book['series'] = series
@@ -534,7 +536,7 @@ class DNB_DE(Source):
                     series = i.xpath("./marc21:subfield[@code='t']", namespaces=ns)[0].text.strip()
                     log.info("[800.t] Series: %s" % series)
 
-                    series = self.clean_series(log, series, book['publisher_name'])
+                    series = clean_series(log, series, book['publisher_name'])
 
                     if series and series_index:
                         book['series'] = series
@@ -558,7 +560,7 @@ class DNB_DE(Source):
                     series = i.xpath("./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
                     log.info("[830.a] Series: %s" % series)
 
-                    series = self.clean_series(log, series, book['publisher_name'])
+                    series = clean_series(log, series, book['publisher_name'])
 
                     if series and series_index:
                         book['series'] = series
@@ -592,7 +594,7 @@ class DNB_DE(Source):
                         if len(i.text) < 2:
                             continue
 
-                        book['subjects_non_gnd'].extend(re.split(',|;', self.remove_sorting_characters(i.text)))
+                        book['subjects_non_gnd'].extend(re.split(',|;', remove_sorting_characters(i.text)))
 
                 if book['subjects_non_gnd']:
                     log.info("[600.a-655.a] Non-GND Subjects: %s" % " ".join(book['subjects_non_gnd']))
@@ -612,7 +614,7 @@ class DNB_DE(Source):
                 for i in record.xpath("./marc21:datafield[@tag='041']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     book['languages'].append(
                         lang_as_iso639_1(
-                            self.iso639_2b_as_iso639_3(i.text.strip())
+                            iso639_2b_as_iso639_3(i.text.strip())
                         )
                     )
 
@@ -632,7 +634,7 @@ class DNB_DE(Source):
                     guessed_title = None
 
                     parts = re.split(
-                        "[:]", self.remove_sorting_characters(book['title']))
+                        "[:]", remove_sorting_characters(book['title']))
 
                     if len(parts) == 2:
                         # make sure only one part of the two parts contains digits
@@ -725,7 +727,7 @@ class DNB_DE(Source):
 
                     # store results
                     if guessed_series and guessed_series_index and guessed_title:
-                        book['title'] = self.clean_title(log, guessed_title)
+                        book['title'] = clean_title(log, guessed_title)
                         book['series'] = guessed_series
                         book['series_index'] = guessed_series_index
 
@@ -771,16 +773,16 @@ class DNB_DE(Source):
                 if self.cfg_append_edition_to_title and book['edition']:
                     book['title'] = book['title'] + " : " + book['edition']
 
-                authors = list(map(lambda i: self.remove_sorting_characters(i), book['authors']))
+                authors = list(map(lambda i: remove_sorting_characters(i), book['authors']))
 
                 mi = Metadata(
-                    self.remove_sorting_characters(book['title']),
+                    remove_sorting_characters(book['title']),
                     list(map(lambda i: re.sub(r"^(.+), (.+)$", r"\2 \1", i), authors))
                 )
 
                 mi.author_sort = " & ".join(authors)
 
-                mi.title_sort = self.remove_sorting_characters(book['title_sort'])
+                mi.title_sort = remove_sorting_characters(book['title_sort'])
 
                 if book['languages']:
                     mi.languages = book['languages']
@@ -788,10 +790,10 @@ class DNB_DE(Source):
 
                 mi.pubdate = book['pubdate']
                 mi.publisher = " ; ".join(filter(
-                    None, [book['publisher_location'], self.remove_sorting_characters(book['publisher_name'])]))
+                    None, [book['publisher_location'], remove_sorting_characters(book['publisher_name'])]))
 
                 if book['series']:
-                    mi.series = self.remove_sorting_characters(book['series'].replace(',', '.'))
+                    mi.series = remove_sorting_characters(book['series'].replace(',', '.'))
                     mi.series_index = book['series_index'] or "0"
 
                 mi.comments = book['comments']
@@ -806,25 +808,25 @@ class DNB_DE(Source):
                 # cfg_subjects:
                 # 0: use only subjects_gnd
                 if self.cfg_fetch_subjects == 0:
-                    mi.tags = self.uniq(book['subjects_gnd'])
+                    mi.tags = uniq(book['subjects_gnd'])
                 # 1: use only subjects_gnd if found, else subjects_non_gnd
                 elif self.cfg_fetch_subjects == 1:
                     if book['subjects_gnd']:
-                        mi.tags = self.uniq(book['subjects_gnd'])
+                        mi.tags = uniq(book['subjects_gnd'])
                     else:
-                        mi.tags = self.uniq(book['subjects_non_gnd'])
+                        mi.tags = uniq(book['subjects_non_gnd'])
                 # 2: subjects_gnd and subjects_non_gnd
                 elif self.cfg_fetch_subjects == 2:
-                    mi.tags = self.uniq(book['subjects_gnd'] + book['subjects_non_gnd'])
+                    mi.tags = uniq(book['subjects_gnd'] + book['subjects_non_gnd'])
                 # 3: use only subjects_non_gnd if found, else subjects_gnd
                 elif self.cfg_fetch_subjects == 3:
                     if book['subjects_non_gnd']:
-                        mi.tags = self.uniq(book['subjects_non_gnd'])
+                        mi.tags = uniq(book['subjects_non_gnd'])
                     else:
-                        mi.tags = self.uniq(book['subjects_gnd'])
+                        mi.tags = uniq(book['subjects_gnd'])
                 # 4: use only subjects_non_gnd
                 elif self.cfg_fetch_subjects == 4:
-                    mi.tags = self.uniq(book['subjects_non_gnd'])
+                    mi.tags = uniq(book['subjects_non_gnd'])
                 # 5: use no subjects at all
                 elif self.cfg_fetch_subjects == 5:
                     mi.tags = []
@@ -925,7 +927,7 @@ class DNB_DE(Source):
                     title, strip_joiners=False, strip_subtitle=False))] )
 
                 # remove some punctation characters, joiners ("and", "und", "&", ...), leading zeros,  and single non-word characters
-                title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
+                title_v.append([x.lstrip('0') for x in strip_german_joiners(self.get_title_tokens(
                     title, strip_joiners=True, strip_subtitle=False)) if (len(x)>1 or x.isnumeric())])
 
                 # remove subtitle (everything after " : ")
@@ -933,7 +935,7 @@ class DNB_DE(Source):
                     title, strip_joiners=False, strip_subtitle=True))] )
 
                 # remove subtitle (everything after " : "), joiners ("and", "und", "&", ...), leading zeros, and single non-word characters
-                title_v.append([x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(
+                title_v.append([x.lstrip('0') for x in strip_german_joiners(self.get_title_tokens(
                     title, strip_joiners=True, strip_subtitle=True)) if (len(x)>1 or x.isnumeric())])
 
             ## create queries
@@ -972,7 +974,7 @@ class DNB_DE(Source):
                 # try with first author and splitted title words (without subtitle) in any index
                 queries.append(
                     ' AND '.join(list(map(lambda x: '"%s"' % x.lstrip('0'),
-                                          list(x.lstrip('0') for x in self.strip_german_joiners(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)))
+                                          list(x.lstrip('0') for x in strip_german_joiners(self.get_title_tokens(title, strip_joiners=True, strip_subtitle=True)))
                                           + list(self.get_author_tokens(authors, only_first_author=True))
                                           )))
                 )
@@ -1020,85 +1022,6 @@ class DNB_DE(Source):
 
         return uniqueQueries
 
-
-    def remove_sorting_characters(self, text):
-        """
-        Remove sorting word markers
-        """
-        if text:
-            return ''.join([c for c in text if ord(c) != 152 and ord(c) != 156])
-        return None
-
-
-    def clean_title(self, log, title):
-        """
-        Clean up title
-        """
-        if title:
-            # remove name of translator from title
-            match = re.search(
-                r'^(.+) [/:] [Aa]us dem .+? von(\s\w+)+$', self.remove_sorting_characters(title))
-            if match:
-                title = match.group(1)
-                log.info("[Title Cleaning] Removed translator, title is now: %s" % title)
-        return title
-
-
-    def clean_series(self, log, series, publisher_name):
-        """
-        Clean up series
-        """
-        if series:
-            # series must at least contain a single character or digit
-            match = re.search(r'[\w\d]', series)
-            if not match:
-                return None
-
-            # remove sorting word markers
-            series = self.remove_sorting_characters(series)
-
-            # do not accept publisher name as series
-            if publisher_name:
-                if publisher_name == series:
-                    log.info("[Series Cleaning] Series %s is equal to publisher, ignoring" % series)
-                    return None
-
-                # Skip series info if it starts with the first word of the publisher's name (which must be at least 4 characters long)
-                match = re.search(
-                    r'^(\w\w\w\w+)', self.remove_sorting_characters(publisher_name))
-                if match:
-                    pubcompany = match.group(1)
-                    if re.search(r'^\W*' + pubcompany, series, flags=re.IGNORECASE):
-                        log.info("[Series Cleaning] Series %s starts with publisher, ignoring" % series)
-                        return None
-
-            # do not accept some other unwanted series names
-            # TODO: Has issues with Umlaus in regex (or series string?)
-            # TODO: Make user configurable
-            for i in [
-                r'^Roman$', r'^Science-fiction$',
-                r'^\[Ariadne\]$', r'^Ariadne$', r'^atb$', r'^BvT$', r'^Bastei L', r'^bb$', r'^Beck Paperback', r'^Beck\-.*berater', r'^Beck\'sche Reihe', r'^Bibliothek Suhrkamp$', r'^BLT$',
-                r'^DLV-Taschenbuch$', r'^Edition Suhrkamp$', r'^Edition Lingen Stiftung$', r'^Edition C', r'^Edition Metzgenstein$', r'^ETB$', r'^dtv', r'^Ein Goldmann',
-                r'^Oettinger-Taschenbuch$', r'^Haymon-Taschenbuch$', r'^Mira Taschenbuch$', r'^Suhrkamp-Taschenbuch$', r'^Bastei-L', r'^Hey$', r'^btb$', r'^bt-Kinder', r'^Ravensburger',
-                r'^Sammlung Luchterhand$', r'^blanvalet$', r'^KiWi$', r'^Piper$', r'^C.H. Beck', r'^Rororo$', r'^Goldmann$', r'^Moewig$', r'^Fischer Klassik$', r'^hey! shorties$', r'^Ullstein',
-                r'^Unionsverlag', r'^Ariadne-Krimi', r'^C.-Bertelsmann', r'^Phantastische Bibliothek$', r'^Beck Paperback$', r'^Beck\'sche Reihe$', r'^Knaur', r'^Volk-und-Welt',
-                r'^Allgemeine', r'^Premium', r'^Horror-Bibliothek$']:
-                if re.search(i, series, flags=re.IGNORECASE):
-                    log.info("[Series Cleaning] Series %s contains unwanted string %s, ignoring" % (series, i))
-                    return None
-        return series
-
-
-    def uniq(self, listWithDuplicates):
-        """
-        Remove duplicates from a list
-        """
-        uniqueList = []
-        if len(listWithDuplicates) > 0:
-            for i in listWithDuplicates:
-                if i not in uniqueList:
-                    uniqueList.append(i)
-        return uniqueList
 
 
     def execute_query(self, log, query, timeout=30):
@@ -1160,52 +1083,6 @@ class DNB_DE(Source):
         if idn is not None:
             url = self.cached_identifier_to_cover_url(idn)
         return url
-
-
-    def iso639_2b_as_iso639_3(self, lang):
-        """
-        Convert ISO 639-2/B to ISO 639-3
-        """
-        #  Most codes in ISO 639-2/B are the same as in ISO 639-3. This are the exceptions:
-        mapping = {
-            'alb': 'sqi',
-            'arm': 'hye',
-            'baq': 'eus',
-            'bur': 'mya',
-            'chi': 'zho',
-            'cze': 'ces',
-            'dut': 'nld',
-            'fre': 'fra',
-            'geo': 'kat',
-            'ger': 'deu',
-            'gre': 'ell',
-            'ice': 'isl',
-            'mac': 'mkd',
-            'may': 'msa',
-            'mao': 'mri',
-            'per': 'fas',
-            'rum': 'ron',
-            'slo': 'slk',
-            'tib': 'bod',
-            'wel': 'cym',
-        }
-        try:
-            return mapping[lang.lower()]
-        except KeyError:
-            return lang
-
-
-    def strip_german_joiners(self, wordlist):
-        """
-        Remove German joiners from list of words
-        By default, Calibre's function "get_title_tokens(...,strip_joiners=True,...)" only removes "a", "and", "the", "&"
-        """
-        tokens = []
-        for word in wordlist:
-            if word.lower() not in ( 'ein', 'eine', 'einer', 'der', 'die', 'das', 'und', 'oder'):
-                tokens.append(word)
-        return tokens
-
 
 
 if __name__ == '__main__':  # tests
