@@ -36,7 +36,7 @@ from calibre.library.comments import sanitize_comments_html
 from calibre.utils.localization import lang_as_iso639_1
 from calibre.ebooks import normalize
 
-from calibre_plugins.DNB_DE.helper import clean_series, uniq, remove_sorting_characters, clean_title, iso639_2b_as_iso639_3, strip_german_joiners
+from calibre_plugins.DNB_DE.helper import clean_series, uniq, remove_sorting_characters, clean_title, iso639_2b_as_iso639_3, strip_german_joiners, guess_series_from_title
 
 class DNB_DE(Source):
     name = 'DNB_DE'
@@ -631,107 +631,15 @@ class DNB_DE(Source):
                 # DNB's metadata often lacks proper series/series_index data
                 ##### If configured: Try to retrieve Series, Series Index and "real" Title from the fetched Title #####
                 if self.cfg_guess_series is True and not book['series'] or not book['series_index'] or book['series_index'] == "0":
-                    guessed_series = None
-                    guessed_series_index = None
-                    guessed_title = None
+                    try:
+                        (guessed_title, guessed_series, guessed_series_index) = guess_series_from_title(log, book['title'])
 
-                    parts = re.split(
-                        "[:]", remove_sorting_characters(book['title']))
-
-                    if len(parts) == 2:
-                        # make sure only one part of the two parts contains digits
-                        if bool(re.search(r"\d", parts[0])) != bool(re.search(r"\d", parts[1])):
-
-                            # call the part with the digits "indexpart" as it contains the series_index, the one without digits "textpart"
-                            if bool(re.search(r"\d", parts[0])):
-                                indexpart = parts[0]
-                                textpart = parts[1]
-                            else:
-                                indexpart = parts[1]
-                                textpart = parts[0]
-
-                            # remove odd characters from start and end of the textpart
-                            match = re.match(
-                                r"^[\s\-–—:]*(.+?)[\s\-–—:]*$", textpart)
-                            if match:
-                                textpart = match.group(1)
-
-                            # if indexparts looks like "Name of the series - Episode 2": extract series and series_index
-                            match = re.match(
-                                r"^\s*(\S\D*?[a-zA-Z]\D*?)\W[\(\/\.,\s\-–—:]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?|Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", indexpart)
-                            if match:
-                                guessed_series_index = match.group(2)
-                                guessed_series = match.group(1)
-
-                                # sometimes books with multiple volumes are detected as series without series name -> Add the volume to the title if no series was found
-                                if not guessed_series:
-                                    guessed_series = textpart
-                                    guessed_title = textpart + " : Band " + guessed_series_index
-                                else:
-                                    guessed_title = textpart
-
-                                log.info("[Series Guesser] 2P1 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
-
-                            else:
-                                # if indexpart looks like "Episode 2 Name of the series": extract series and series_index
-                                match = re.match(
-                                    r"^\s*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*(\S\D*?[a-zA-Z]\D*?)[\/\.,\-–—\s]*$", indexpart)
-                                if match:
-                                    guessed_series_index = match.group(1)
-                                    guessed_series = match.group(2)
-
-                                    # sometimes books with multiple volumes are detected as series without series name -> Add the volume to the title if no series was found
-                                    if not guessed_series:
-                                        guessed_series = textpart
-                                        guessed_title = textpart + " : Band " + guessed_series_index
-                                    else:
-                                        guessed_title = textpart
-
-                                    log.info("[Series Guesser] 2P2 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
-
-                                else:
-                                    # if indexpart looks like "Band 2": extract series_index
-                                    match = re.match(
-                                        r"^[\s\(]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*[\/\.,\-–—\s]*$", indexpart)
-                                    if match:
-                                        guessed_series_index = match.group(1)
-
-                                        # if textpart looks like "Name of the Series - Book Title": extract series and title
-                                        match = re.match(
-                                            r"^\s*(\w+.+?)\s?[\.;\-–:]+\s(\w+.+)\s*$", textpart)
-                                        if match:
-                                            guessed_series = match.group(1)
-                                            guessed_title = match.group(2)
-
-                                            log.info("[Series Guesser] 2P3 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
-
-                    elif len(parts) == 1:
-                        # if title looks like: "Name of the series - Title (Episode 2)"
-                        match = re.match(
-                            r"^\s*(\S.+?) \- (\S.+?) [\(\/\.,\s\-–:](?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", parts[0])
-                        if match:
-                            guessed_series_index = match.group(3)
-                            guessed_series = match.group(1)
-                            guessed_title = match.group(2)
-
-                            log.info("[Series Guesser] 1P1 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
-
-                        else:
-                            # if title looks like "Name of the series - Episode 2"
-                            match = re.match(
-                                r"^\s*(\S.+?)[\(\/\.,\s\-–—:]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", parts[0])
-                            if match:
-                                guessed_series_index = match.group(2)
-                                guessed_series = match.group(1)
-                                guessed_title = guessed_series + " : Band " + guessed_series_index
-
-                                log.info("[Series Guesser] 1P2 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
-
-                    # store results
-                    if guessed_series and guessed_series_index and guessed_title:
+                        # store results
                         book['title'] = clean_title(log, guessed_title)
                         book['series'] = guessed_series
                         book['series_index'] = guessed_series_index
+                    except TypeError:
+                        pass
 
 
                 ##### Filter exact searches #####
@@ -1092,6 +1000,7 @@ if __name__ == '__main__':  # tests
     # calibre-debug -e __init__.py
     from calibre.ebooks.metadata.sources.test import (
         test_identify_plugin, title_test, authors_test, series_test, comments_test, pubdate_test, isbn_test, tags_test)
+    from tests import series_test
 
     test_identify_plugin(DNB_DE.name, [
         (
@@ -1144,11 +1053,42 @@ if __name__ == '__main__':  # tests
             ],
         ),
         (
+            # once this failed when extracting language
             {'identifiers': {'dnb-idn': '1160947511'}},
             [
                 title_test('Zar und Zimmermann : heiteres Bühnenspiel in 3 Aufzügen ; nach Lortzings komischer Oper für die Volksbühne'),
                 authors_test(['Franz Hillmann']),
                 pubdate_test(2018, 1, 1),
+            ],
+        ),
+        (
+            # series from 490
+            {'identifiers': {'dnb-idn': '1315080028'}},
+            [
+                title_test('Glutstrom : Kriminalroman'),
+                authors_test(['Daniel Holbe', 'Ben Kryst Tomasson']),
+                pubdate_test(2024, 1, 1),
+                series_test('Ein Sabine-Kaufmann-Krimi', 8),
+            ],
+        ),
+        (
+            # series from 245
+            {'identifiers': {'dnb-idn': '458320129'}},
+            [
+                title_test('Der Mann mit dem dritten Auge'),
+                authors_test(['alfred elton van vogt']),
+                pubdate_test(1968, 1, 1),
+                series_test('Terra-Extra', 174),
+            ],
+        ),
+        (
+            # series and index guessed from title
+            {'identifiers': {'dnb-idn': '1283230224'}},
+            [
+                title_test('junipeei - der pfad der gestrandeten : band 5'),
+                authors_test(['Susanna Scheffer']),
+                pubdate_test(2023, 1, 1),
+                series_test('Junipeei - Der Pfad der Gestrandeten', 5),
             ],
         ),
     ],fail_missing_meta=False)

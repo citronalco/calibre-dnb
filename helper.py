@@ -124,3 +124,110 @@ def strip_german_joiners(wordlist):
         if word.lower() not in ( 'ein', 'eine', 'einer', 'der', 'die', 'das', 'und', 'oder'):
             tokens.append(word)
     return tokens
+
+
+def guess_series_from_title(log, title):
+    """
+    Try to extract Series and Series Index from a book's title
+    """
+    guessed_series = None
+    guessed_series_index = None
+    guessed_title = None
+
+    parts = re.split("[:]", remove_sorting_characters(title))
+
+    if len(parts) == 2:
+        # make sure only one part of the two parts contains digits
+        if bool(re.search(r"\d", parts[0])) != bool(re.search(r"\d", parts[1])):
+
+            # call the part with the digits "indexpart" as it contains the series_index, the one without digits "textpart"
+            if bool(re.search(r"\d", parts[0])):
+                indexpart = parts[0]
+                textpart = parts[1]
+            else:
+                indexpart = parts[1]
+                textpart = parts[0]
+
+            # remove odd characters from start and end of the textpart
+            match = re.match(
+                r"^[\s\-–—:]*(.+?)[\s\-–—:]*$", textpart)
+            if match:
+                textpart = match.group(1)
+
+            # if indexparts looks like "Name of the series - Episode 2": extract series and series_index
+            match = re.match(
+                r"^\s*(\S\D*?[a-zA-Z]\D*?)\W[\(\/\.,\s\-–—:]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?|Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", indexpart)
+            if match:
+                guessed_series_index = match.group(2)
+                guessed_series = match.group(1)
+
+                # sometimes books with multiple volumes are detected as series without series name -> Add the volume to the title if no series was found
+                if not guessed_series:
+                    guessed_series = textpart
+                    guessed_title = textpart + " : Band " + guessed_series_index
+                else:
+                    guessed_title = textpart
+
+                log.info("[Series Guesser] 2P1 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
+                return guessed_title, guessed_series, guessed_series_index
+
+            else:
+                # if indexpart looks like "Episode 2 Name of the series": extract series and series_index
+                match = re.match(
+                    r"^\s*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*(\S\D*?[a-zA-Z]\D*?)[\/\.,\-–—\s]*$", indexpart)
+                if match:
+                    guessed_series_index = match.group(1)
+                    guessed_series = match.group(2)
+
+                    # sometimes books with multiple volumes are detected as series without series name -> Add the volume to the title if no series was found
+                    if not guessed_series:
+                        guessed_series = textpart
+                        guessed_title = textpart + " : Band " + guessed_series_index
+                    else:
+                        guessed_title = textpart
+
+                    log.info("[Series Guesser] 2P2 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
+                    return guessed_title, guessed_series, guessed_series_index
+
+                else:
+                    # if indexpart looks like "Band 2": extract series_index
+                    match = re.match(
+                        r"^[\s\(]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*[\/\.,\-–—\s]*$", indexpart)
+                    if match:
+                        guessed_series_index = match.group(1)
+
+                        # if textpart looks like "Name of the Series - Book Title": extract series and title
+                        match = re.match(
+                            r"^\s*(\w+.+?)\s?[\.;\-–:]+\s(\w+.+)\s*$", textpart)
+                        if match:
+                            guessed_series = match.group(1)
+                            guessed_title = match.group(2)
+
+                            log.info("[Series Guesser] 2P3 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
+                            return guessed_title, guessed_series, guessed_series_index
+
+    elif len(parts) == 1:
+        # if title looks like: "Name of the series - Title (Episode 2)"
+        match = re.match(
+            r"^\s*(\S.+?) \- (\S.+?) [\(\/\.,\s\-–:](?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–—:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", parts[0])
+        if match:
+            guessed_series_index = match.group(3)
+            guessed_series = match.group(1)
+            guessed_title = match.group(2)
+
+            log.info("[Series Guesser] 1P1 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
+            return guessed_title, guessed_series, guessed_series_index
+
+        else:
+            # if title looks like "Name of the series - Episode 2"
+            match = re.match(
+                r"^\s*(\S.+?)[\(\/\.,\s\-–—:]*(?:#|Reihe|Nr\.|Heft|Volume|Vol\.?Episode|Bd\.|Sammelband|[B|b]and|Part|Kapitel|[Tt]eil|Folge)[,\-–:\s#\(]*(\d+[\.,]?\d*)[\)\s\-–—:]*$", parts[0])
+            if match:
+                guessed_series_index = match.group(2)
+                guessed_series = match.group(1)
+                guessed_title = guessed_series + " : Band " + guessed_series_index
+
+                log.info("[Series Guesser] 1P2 matched: Title: %s, Series: %s[%s]" % (guessed_title, guessed_series, guessed_series_index))
+                return guessed_title, guessed_series, guessed_series_index
+
+    return None
