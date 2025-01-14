@@ -126,7 +126,6 @@ class DNB_DE(Source):
                     'series': None,
                     'series_index': None,
                     'pubdate': None,
-                    'language': None,
                     'languages': [],
                     'title': None,
                     'title_sort': None,
@@ -695,8 +694,8 @@ class DNB_DE(Source):
                 mi.title_sort = remove_sorting_characters(book['title_sort'])
 
                 if book['languages']:
-                    mi.languages = book['languages']
                     mi.language = book['languages'][0]
+                    mi.languages = book['languages']
 
                 mi.pubdate = book['pubdate']
                 mi.publisher = " ; ".join(filter(
@@ -1000,7 +999,7 @@ if __name__ == '__main__':  # tests
     # calibre-debug -e __init__.py
     from calibre.ebooks.metadata.sources.test import (
         test_identify_plugin, title_test, authors_test, series_test, comments_test, pubdate_test, isbn_test, tags_test)
-    from tests import series_test
+    from tests import series_test, languages_test
 
     test_identify_plugin(DNB_DE.name, [
         (
@@ -1009,6 +1008,7 @@ if __name__ == '__main__':  # tests
             [
                 title_test('das kapital im 21. jahrhundert'),
                 authors_test(['thomas piketty']),
+                languages_test(['de']),
             ],
         ),
         (
@@ -1019,6 +1019,7 @@ if __name__ == '__main__':  # tests
                 authors_test(['jim c. hines']),
                 series_test('Die Goblin-Saga / Jim C. Hines', '4'),
                 pubdate_test(2009, 1, 1),
+                languages_test(['de']),
                 tags_test(['fantasy bücher', 'fantasy', 'kinderbücher bis 11 jahre']),
             ],
         ),
@@ -1030,6 +1031,7 @@ if __name__ == '__main__':  # tests
                 title_test('Der Report der Magd : Roman', exact=True),
                 authors_test(['Margaret Atwood']),
                 pubdate_test(2020, 1, 1),
+                languages_test(['de']),
                 tags_test(['moderner klassiker', 'hoffnung', 'das herz kommt zuletzt', 'the handmaid', 'volker schlöndorff',
                            'die geschichte der dienerin', 'erzählende literatur: gegenwartsliteratur ab 1945', 'aldous huxley',
                            'oryx und crake', 'totalitärer staat', 'dystopie', 'unterdrückung', 'george orwell', "handmaid's tale",
@@ -1050,6 +1052,7 @@ if __name__ == '__main__':  # tests
                 authors_test(['Barbara Bišický-Ehrlich']),
                 comments_test('Der beste Frisör der Welt, Rinderzunge zum Frühstück, ein Rabbiner ohne Schuhe und über allem die Frage, was Karel Gott auf ihrer Hochzeit zu suchen hatte'),
                 pubdate_test(2022, 1, 1),
+                languages_test(['de']),
             ],
         ),
         (
@@ -1059,6 +1062,7 @@ if __name__ == '__main__':  # tests
                 title_test('Zar und Zimmermann : heiteres Bühnenspiel in 3 Aufzügen ; nach Lortzings komischer Oper für die Volksbühne'),
                 authors_test(['Franz Hillmann']),
                 pubdate_test(2018, 1, 1),
+                languages_test(['de']),
             ],
         ),
         (
@@ -1069,6 +1073,7 @@ if __name__ == '__main__':  # tests
                 authors_test(['Daniel Holbe', 'Ben Kryst Tomasson']),
                 pubdate_test(2024, 1, 1),
                 series_test('Ein Sabine-Kaufmann-Krimi', 8),
+                languages_test(['de']),
             ],
         ),
         (
@@ -1079,6 +1084,7 @@ if __name__ == '__main__':  # tests
                 authors_test(['alfred elton van vogt']),
                 pubdate_test(1968, 1, 1),
                 series_test('Terra-Extra', 174),
+                languages_test(['de']),
             ],
         ),
         (
@@ -1089,6 +1095,18 @@ if __name__ == '__main__':  # tests
                 authors_test(['Susanna Scheffer']),
                 pubdate_test(2023, 1, 1),
                 series_test('Junipeei - Der Pfad der Gestrandeten', 5),
+                languages_test(['de']),
+            ],
+        ),
+        (
+            # multiple languages, multiple authors, unicode
+            {'identifiers': {'dnb-idn': '1205560297'}},
+            [
+                title_test('5. schweizerischer notariatskongress : = 5e congrès des notaires de suisse'),
+                authors_test(['Susanne Kuster', 'Anja Risch', 'Urs Paul Holenstein', 'François-Xavier Bary', 'Daniel Hürlimann', 'Silvio Hänsenberger', 'Kai Brünnler',
+                              'Claudia Schreiber', 'Philip Hanke', 'Pit Meyer', 'Werner Möckli', 'Walter Berli', 'Jacques Iffland', 'Rebekka Reinhard']),
+                pubdate_test(2020, 1, 1),
+                languages_test(['de', 'fr']),
             ],
         ),
     ],fail_missing_meta=False)
