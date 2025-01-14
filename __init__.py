@@ -611,6 +611,8 @@ class DNB_DE(Source):
 
                 ##### Field 41: "Language Code" #####
                 # Get Languages (unfortunately in ISO-639-2/B ("ger" for German), while Calibre uses ISO-639-1 ("de"))
+                # ISO-639-2/B is very close to ISO-639-3, which can be converted to ISO-639-1 with Calibre's "lang_as_iso639_1" function
+                # So we translate ISO-639-2/B to ISO-639-3 and feed that to Calibre
                 for i in record.xpath("./marc21:datafield[@tag='041']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
                     book['languages'].append(
                         lang_as_iso639_1(
@@ -1108,6 +1110,7 @@ if __name__ == '__main__':  # tests
                 authors_test(['jim c. hines']),
                 series_test('Die Goblin-Saga / Jim C. Hines', '4'),
                 pubdate_test(2009, 1, 1),
+                tags_test(['fantasy bücher', 'fantasy', 'kinderbücher bis 11 jahre']),
             ],
         ),
         (
@@ -1137,7 +1140,15 @@ if __name__ == '__main__':  # tests
                 title_test('Der Rabbiner ohne Schuh : Kuriositäten aus meinem fast koscheren Leben'),
                 authors_test(['Barbara Bišický-Ehrlich']),
                 comments_test('Der beste Frisör der Welt, Rinderzunge zum Frühstück, ein Rabbiner ohne Schuhe und über allem die Frage, was Karel Gott auf ihrer Hochzeit zu suchen hatte'),
+                pubdate_test(2022, 1, 1),
             ],
         ),
-
+        (
+            {'identifiers': {'dnb-idn': '1160947511'}},
+            [
+                title_test('Zar und Zimmermann : heiteres Bühnenspiel in 3 Aufzügen ; nach Lortzings komischer Oper für die Volksbühne'),
+                authors_test(['Franz Hillmann']),
+                pubdate_test(2018, 1, 1),
+            ],
+        ),
     ],fail_missing_meta=False)
