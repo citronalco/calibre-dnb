@@ -23,13 +23,13 @@ def clean_title(log, title):
     return title
 
 
-def clean_series(log, series, publisher_name):
+def clean_series(log, series, publisher_name, unwanted_regex):
     """
     Clean up series
     """
     if series:
-        # series must at least contain a single character or digit
-        match = re.search(r'[\w\d]', series)
+        # series must at least contain a single character
+        match = re.search(r'\S', series)
         if not match:
             return None
 
@@ -38,7 +38,7 @@ def clean_series(log, series, publisher_name):
 
         # do not accept publisher name as series
         if publisher_name:
-            if publisher_name == series:
+            if publisher_name.lower() == series.lower():
                 log.info("[Series Cleaning] Series %s is equal to publisher, ignoring" % series)
                 return None
 
@@ -52,19 +52,16 @@ def clean_series(log, series, publisher_name):
                     return None
 
         # do not accept some other unwanted series names
-        # TODO: Has issues with Umlaus in regex (or series string?)
-        # TODO: Make user configurable
-        for i in [
-            r'^Roman$', r'^Science-fiction$',
-            r'^\[Ariadne\]$', r'^Ariadne$', r'^atb$', r'^BvT$', r'^Bastei L', r'^bb$', r'^Beck Paperback', r'^Beck\-.*berater', r'^Beck\'sche Reihe', r'^Bibliothek Suhrkamp$', r'^BLT$',
-            r'^DLV-Taschenbuch$', r'^Edition Suhrkamp$', r'^Edition Lingen Stiftung$', r'^Edition C', r'^Edition Metzgenstein$', r'^ETB$', r'^dtv', r'^Ein Goldmann',
-            r'^Oettinger-Taschenbuch$', r'^Haymon-Taschenbuch$', r'^Mira Taschenbuch$', r'^Suhrkamp-Taschenbuch$', r'^Bastei-L', r'^Hey$', r'^btb$', r'^bt-Kinder', r'^Ravensburger',
-            r'^Sammlung Luchterhand$', r'^blanvalet$', r'^KiWi$', r'^Piper$', r'^C.H. Beck', r'^Rororo$', r'^Goldmann$', r'^Moewig$', r'^Fischer Klassik$', r'^hey! shorties$', r'^Ullstein',
-            r'^Unionsverlag', r'^Ariadne-Krimi', r'^C.-Bertelsmann', r'^Phantastische Bibliothek$', r'^Beck Paperback$', r'^Beck\'sche Reihe$', r'^Knaur', r'^Volk-und-Welt',
-            r'^Allgemeine', r'^Premium', r'^Horror-Bibliothek$']:
-            if re.search(i, series, flags=re.IGNORECASE):
-                log.info("[Series Cleaning] Series %s contains unwanted string %s, ignoring" % (series, i))
-                return None
+        # try...except, log errors!
+        if unwanted_regex:
+            for i in unwanted_regex:
+                try:
+                  if re.search(r'' + i, series, flags=re.IGNORECASE):
+                      log.info("[Series Cleaning] Series %s contains unwanted string %s, ignoring" % (series, i))
+                      return None
+                except:
+                      log.warn("[Series Cleaning] Regular expression %s caused an error, ignoring" % i)
+                      pass
     return series
 
 
@@ -78,7 +75,6 @@ def uniq(listWithDuplicates):
             if i not in uniqueList:
                 uniqueList.append(i)
     return uniqueList
-
 
 
 def iso639_2b_as_iso639_3(lang):

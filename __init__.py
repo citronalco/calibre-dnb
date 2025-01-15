@@ -72,6 +72,10 @@ class DNB_DE(Source):
             cfg.KEY_APPEND_EDITION_TO_TITLE, False)
         self.cfg_fetch_subjects = cfg.plugin_prefs[cfg.STORE_NAME].get(
             cfg.KEY_FETCH_SUBJECTS, 2)
+        self.cfg_skip_series_starting_with_publishers_name = cfg.plugin_prefs[cfg.STORE_NAME].get(
+            cfg.KEY_SKIP_SERIES_STARTING_WITH_PUBLISHERS_NAME, True)
+        self.cfg_unwanted_series_names = cfg.plugin_prefs[cfg.STORE_NAME].get(
+            cfg.KEY_UNWANTED_SERIES_NAMES, [])
 
     def config_widget(self):
         self.cw = None
@@ -292,7 +296,9 @@ class DNB_DE(Source):
 
                         book['series'] = ' - '.join(series_parts)
                         log.info("[245] Series: %s" % book['series'])
-                        book['series'] = clean_series(log, book['series'], book['publisher_name'])
+                        book['series'] = clean_series(log, book['series'],
+                                                      book['publisher_name'] if self.cfg_skip_series_starting_with_publishers_name else None,
+                                                      self.cfg_unwanted_series_names)
 
                         # build series index
                         if code_n:
@@ -490,7 +496,9 @@ class DNB_DE(Source):
                         log.info("[490.a] Series: %s" % series)
 
                     if series:
-                        series = clean_series(log, series, book['publisher_name'])
+                        series = clean_series(log, series,
+                                              book['publisher_name'] if self.cfg_skip_series_starting_with_publishers_name else None,
+                                              self.cfg_unwanted_series_names)
 
                         if series and series_index:
                             book['series'] = series
@@ -510,8 +518,9 @@ class DNB_DE(Source):
                         series_index = match.group(2)
                         log.info("[246.a] Series: %s" % series)
                         log.info("[246.a] Series_Index: %s" % book['series_index'])
-
-                        series = clean_series(log, match.group(1), book['publisher_name'])
+                        series = clean_series(log, match.group(1),
+                                              book['publisher_name'] if self.cfg_skip_series_starting_with_publishers_name else None,
+                                              self.cfg_unwanted_series_names)
 
                         if series and series_index:
                             book['series'] = series
@@ -534,8 +543,9 @@ class DNB_DE(Source):
                     # Series
                     series = i.xpath("./marc21:subfield[@code='t']", namespaces=ns)[0].text.strip()
                     log.info("[800.t] Series: %s" % series)
-
-                    series = clean_series(log, series, book['publisher_name'])
+                    series = clean_series(log, series,
+                                          book['publisher_name'] if self.cfg_skip_series_starting_with_publishers_name else None,
+                                          self.cfg_unwanted_series_names)
 
                     if series and series_index:
                         book['series'] = series
@@ -558,8 +568,9 @@ class DNB_DE(Source):
                     # Series
                     series = i.xpath("./marc21:subfield[@code='a']", namespaces=ns)[0].text.strip()
                     log.info("[830.a] Series: %s" % series)
-
-                    series = clean_series(log, series, book['publisher_name'])
+                    series = clean_series(log, series,
+                                          book['publisher_name'] if self.cfg_skip_series_starting_with_publishers_name else None,
+                                          self.cfg_unwanted_series_names)
 
                     if series and series_index:
                         book['series'] = series
