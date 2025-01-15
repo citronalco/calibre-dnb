@@ -644,10 +644,16 @@ class DNB_DE(Source):
                     try:
                         (guessed_title, guessed_series, guessed_series_index) = guess_series_from_title(log, book['title'])
 
-                        # store results
-                        book['title'] = clean_title(log, guessed_title)
-                        book['series'] = guessed_series
-                        book['series_index'] = guessed_series_index
+                        guessed_title = clean_title(log, guessed_title)
+                        guessed_series = clean_series(log, guessed_series,
+                                                      book['publisher_name'] if self.cfg_skip_series_starting_with_publishers_name else None,
+                                                      self.cfg_unwanted_series_names)
+
+                        if guessed_title and guessed_series and guessed_series_index:
+                            book['title'] = guessed_title
+                            book['series'] = guessed_series
+                            book['series_index'] = guessed_series_index
+
                     except TypeError:
                         pass
 
