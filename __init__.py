@@ -170,6 +170,19 @@ class DNB_DE(Source):
                 except IndexError:
                     pass
 
+                ##### Field 16: "National Bibliographic Agency Control Number" #####
+                # Get Identifier "IDN" (dnb-idn)
+                try:
+                    book['idn'] = record.xpath("./marc21:datafield[@tag='016']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
+                    log.info("[016.a] Identifier IDN: %s" % book['idn'])
+
+                   # Skip result if idn does not match
+                    if idn and idn != book['idn']:
+                        log.info("Extracted IDN does not match book's IDN, skipping record")
+                        continue
+                except IndexError:
+                    pass
+
 
                 ##### Field 776: "Additional Physical Form Entry" #####
                 # References from ebook's entry to paper book's entry (and vice versa)
@@ -398,15 +411,6 @@ class DNB_DE(Source):
                                 log.info("[856.u] Could not download Comments from %s: %s" % (url, e))
                     except IndexError:
                         pass
-
-
-                ##### Field 16: "National Bibliographic Agency Control Number" #####
-                # Get Identifier "IDN" (dnb-idn)
-                try:
-                    book['idn'] = record.xpath("./marc21:datafield[@tag='016']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
-                    log.info("[016.a] Identifier IDN: %s" % book['idn'])
-                except IndexError:
-                    pass
 
 
                 ##### Field 24: "Other Standard Identifier" #####
@@ -639,7 +643,7 @@ class DNB_DE(Source):
 
                 ##### SERIES GUESSER #####
                 # DNB's metadata often lacks proper series/series_index data
-                ##### If configured: Try to retrieve Series, Series Index and "real" Title from the fetched Title #####
+                # If wanted by user: Try to retrieve Series, Series Index and "real" Title from the fetched Title
                 if self.cfg_guess_series is True and not book['series'] or not book['series_index'] or book['series_index'] == "0":
                     try:
                         (guessed_title, guessed_series, guessed_series_index) = guess_series_from_title(log, book['title'])
@@ -657,11 +661,6 @@ class DNB_DE(Source):
                     except TypeError:
                         pass
 
-
-                ##### Filter exact searches #####
-                if idn and book['idn'] and idn != book['idn']:
-                    log.info("Extracted IDN does not match book's IDN, skipping record")
-                    continue
 
                 ##### Figure out working URL to cover #####
                 # Cover URL is basically fixed and takes ISBN as an argument
