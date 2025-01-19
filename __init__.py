@@ -170,16 +170,12 @@ class DNB_DE(Source):
                 except IndexError:
                     pass
 
+
                 ##### Field 16: "National Bibliographic Agency Control Number" #####
                 # Get Identifier "IDN" (dnb-idn)
                 try:
                     book['idn'] = record.xpath("./marc21:datafield[@tag='016']/marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns)[0].text.strip()
                     log.info("[016.a] Identifier IDN: %s" % book['idn'])
-
-                   # Skip result if idn does not match
-                    if idn and idn != book['idn']:
-                        log.info("Extracted IDN does not match book's IDN, skipping record")
-                        continue
                 except IndexError:
                     pass
 
