@@ -264,8 +264,8 @@ class DNB_DE(Source):
                 #	Series:		"The Endless Book"
                 #	Series Index:	2
 
+                title_parts = []
                 for field in record.xpath("./marc21:datafield[@tag='245']", namespaces=ns):
-                    title_parts = []
 
                     code_a = []
                     for i in field.xpath("./marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
@@ -320,9 +320,23 @@ class DNB_DE(Source):
                     except IndexError:
                         pass
 
-                    book['title'] = " : ".join(title_parts)
-                    log.info("[245] Title: %s" % book['title'])
-                    book['title'] = clean_title(log, book['title'])
+                #### Field 249: "Additional Titles for Compilations"
+                additional_titles_parts = []
+                for field in record.xpath("./marc21:datafield[@tag='249']", namespaces=ns):
+                    for i in field.xpath("./marc21:subfield[@code='a' and string-length(text())>0]", namespaces=ns):
+                        additional_titles_parts.append(i.text.strip())
+
+
+                # Merge Title and Additional Titles
+                title = " : ".join(title_parts)
+                log.info("[245] Title: %s" % title)
+
+                additional_titles = " / ".join(additional_titles_parts)
+                log.info("[249] Additional Titles: %s" % additional_titles)
+
+                book['title'] = " / ".join(filter(None, [title, additional_titles]))
+                book['title'] = clean_title(log, book['title'])
+
 
                 # Title_Sort
                 if title_parts:
@@ -337,7 +351,7 @@ class DNB_DE(Source):
                         title_sort_parts[0] = ''.join(filter(None, [title_sort_regex.group(1).strip(), title_sort_regex.group(3).strip(), ", " + sortword]))
 
                     book['title_sort'] = " : ".join(title_sort_parts)
-                    log.info("[245] Title_Sort: %s" % book['title_sort'])
+                    log.info("[245/249] Title_Sort: %s" % book['title_sort'])
 
 
                 ##### Field 100: "Main Entry-Personal Name"  #####
