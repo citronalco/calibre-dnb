@@ -77,10 +77,11 @@ class ConfigWidget(DefaultConfigWidget):
         row += 1
         append_edition_to_title_label = QLabel(
             'Append Edition to Title:', self)
-        append_edition_to_title_label.setToolTip('For some books DNB has information about the edition.\n'
-                                                 'This plugin can fetch this information and append it to the book\'s title,\n'
-                                                 'e.g. "Mord am Tegernsee : Ein Bayern-Krimi : 2. Aufl.".\n'
-                                                 'Of course this only works reliable if you search for a book with a known unique identifier such as dnb-idn or ISBN.')
+        append_edition_to_title_label.setToolTip(
+            'For some books DNB has information about the edition.\n'
+            'This plugin can fetch this information and append it to the book\'s title,\n'
+            'e.g. "Mord am Tegernsee : Ein Bayern-Krimi : 2. Aufl.".\n'
+            'Of course this only works reliable if you search for a book with a known unique identifier such as dnb-idn or ISBN.')
         other_group_box_layout.addWidget(
             append_edition_to_title_label, row, 0, 1, 1)
 
@@ -93,10 +94,11 @@ class ConfigWidget(DefaultConfigWidget):
         # Fetch which type of Subjects?
         row += 1
         fetch_subjects_label = QLabel('Fetch Subjects:', self)
-        fetch_subjects_label.setToolTip('DNB provides several types of subjects:\n'
-                                        ' - Standardized subjects according to the GND\n'
-                                        ' - Subjects delivered by the publisher\n'
-                                        'You can choose which ones to fetch.')
+        fetch_subjects_label.setToolTip(
+            'DNB provides several types of subjects:\n'
+            ' - Standardized subjects according to the GND\n'
+            ' - Subjects delivered by the publisher\n'
+            'You can choose which ones to fetch.')
         other_group_box_layout.addWidget(fetch_subjects_label, row, 0, 1, 1)
 
         self.fetch_subjects_radios_group = QButtonGroup(other_group_box)

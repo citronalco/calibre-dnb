@@ -56,25 +56,24 @@ def clean_series(log, series, publisher_name, unwanted_regex):
         if unwanted_regex:
             for i in unwanted_regex:
                 try:
-                  if re.search(r'' + i, series, flags=re.IGNORECASE):
-                      log.info("[Series Cleaning] Series %s contains unwanted string %s, ignoring" % (series, i))
-                      return None
+                    if re.search(r'' + i, series, flags=re.IGNORECASE):
+                        log.info("[Series Cleaning] Series %s contains unwanted string %s, ignoring" % (series, i))
+                        return None
                 except:
-                      log.warn("[Series Cleaning] Regular expression %s caused an error, ignoring" % i)
-                      pass
+                    log.warn("[Series Cleaning] Regular expression %s caused an error, ignoring" % i)
+                    pass
     return series
 
 
-def uniq(listWithDuplicates):
+def uniq(list_with_duplicates):
     """
     Remove duplicates from a list
     """
-    uniqueList = []
-    if len(listWithDuplicates) > 0:
-        for i in listWithDuplicates:
-            if i not in uniqueList:
-                uniqueList.append(i)
-    return uniqueList
+    unique_list = []
+    for i in list_with_duplicates:
+        if i not in unique_list:
+            unique_list.append(i)
+    return unique_list
 
 
 def iso639_2b_as_iso639_3(lang):
