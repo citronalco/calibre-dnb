@@ -27,17 +27,17 @@ DEFAULT_STORE_VALUES = {
     KEY_FETCH_SUBJECTS: 2,
     KEY_SKIP_SERIES_STARTING_WITH_PUBLISHERS_NAME: True,
     # unwanted series names
-    KEY_UNWANTED_SERIES_NAMES: ['^Roman$', '^Science-fiction$', '^\[Ariadne\]$', '^Ariadne$', '^atb$', '^BvT$',
-                                '^Bastei L', '^bb$', '^Beck Paperback', '^Beck\-.*berater', '^Beck\'sche Reihe',
-                                '^Bibliothek Suhrkamp$', '^BLT$', '^DLV-Taschenbuch$', '^Edition Suhrkamp$',
-                                '^Edition Lingen Stiftung$', '^Edition C', '^Edition Metzgenstein$', '^ETB$', '^dtv',
-                                '^Ein Goldmann', '^Oettinger-Taschenbuch$', '^Haymon-Taschenbuch$', '^Mira Taschenbuch$',
-                                '^Suhrkamp-Taschenbuch$', '^Bastei-L', '^Hey$', '^btb$', '^bt-Kinder', '^Ravensburger',
-                                '^Sammlung Luchterhand$', '^blanvalet$', '^KiWi$', '^Piper$', '^C.H. Beck', '^Rororo',
-                                '^Goldmann$', '^Moewig$', '^Fischer Klassik$', '^hey! shorties$', '^Ullstein',
-                                '^Unionsverlag', '^Ariadne-Krimi', '^C.-Bertelsmann', '^Phantastische Bibliothek$',
-                                '^Beck Paperback$', '^Beck\'sche Reihe$', '^Knaur', '^Volk-und-Welt', '^Allgemeine',
-                                '^Premium', '^Horror-Bibliothek$'],
+    KEY_UNWANTED_SERIES_NAMES: [r'^Roman$', r'^Science-fiction$', r'^\[Ariadne\]$', r'^Ariadne$', r'^atb$', r'^BvT$',
+                                r'^Bastei L', r'^bb$', r'^Beck Paperback', r'^Beck\-.*berater', r'^Beck\'sche Reihe',
+                                r'^Bibliothek Suhrkamp$', r'^BLT$', r'^DLV-Taschenbuch$', r'^Edition Suhrkamp$',
+                                r'^Edition Lingen Stiftung$', r'^Edition C', r'^Edition Metzgenstein$', r'^ETB$', r'^dtv',
+                                r'^Ein Goldmann', r'^Oettinger-Taschenbuch$', r'^Haymon-Taschenbuch$', r'^Mira Taschenbuch$',
+                                r'^Suhrkamp-Taschenbuch$', r'^Bastei-L', r'^Hey$', r'^btb$', r'^bt-Kinder', r'^Ravensburger',
+                                r'^Sammlung Luchterhand$', r'^blanvalet$', r'^KiWi$', r'^Piper$', r'^C.H. Beck', r'^Rororo',
+                                r'^Goldmann$', r'^Moewig$', r'^Fischer Klassik$', r'^hey! shorties$', r'^Ullstein',
+                                r'^Unionsverlag', r'^Ariadne-Krimi', r'^C.-Bertelsmann', r'^Phantastische Bibliothek$',
+                                r'^Beck Paperback$', r'^Beck\'sche Reihe$', r'^Knaur', r'^Volk-und-Welt', r'^Allgemeine',
+                                r'^Premium', r'^Horror-Bibliothek$'],
 }
 
 # This is where all preferences for this plugin will be stored
