@@ -5,7 +5,7 @@ from __future__ import (unicode_literals, division,
 from calibre.utils.config import JSONConfig
 from calibre.gui2.metadata.config import ConfigWidget as DefaultConfigWidget
 
-__license__ = 'GPL v3'
+__license__ = 'agpl-3.0'
 __copyright__ = '2017, Bernhard Geier <geierb@geierb.de>'
 __docformat__ = 'restructuredtext en'
 

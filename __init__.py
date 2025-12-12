@@ -8,7 +8,7 @@
 
 from __future__ import unicode_literals
 
-__license__ = 'GPL v3'
+__license__ = 'agpl-3.0'
 __copyright__ = '2017, Bernhard Geier <geierb@geierb.de>'
 __docformat__ = 'en'
 
