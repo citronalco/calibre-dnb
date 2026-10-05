@@ -813,10 +813,20 @@ class DNB_DE(Source):
         if abort.is_set():
             return
 
+        # portal.dnb.de is protected by Anubis, which serves an HTML challenge page
+        # instead of the image to clients with a browser User-Agent.
+        # Identify honestly as this plugin to get the actual cover.
         br = self.browser
+        br.addheaders = [(k, v) for k, v in br.addheaders if k.lower() != 'user-agent']
+        br.addheaders.append(('User-agent', 'calibre-dnb/%s (+https://github.com/citronalco/calibre-dnb)' % '.'.join(map(str, self.version))))
         log('Downloading cover from:', cached_url)
         try:
-            cdata = br.open_novisit(cached_url, timeout=timeout).read()
+            response = br.open_novisit(cached_url, timeout=timeout)
+            content_type = response.info().get('Content-Type', '')
+            cdata = response.read()
+            if not content_type.startswith('image/'):
+                log.info("Cover URL did not return an image (Content-Type: %s), skipping" % content_type)
+                return
             result_queue.put((self, cdata))
         except Exception as e:
             log.info("Could not download Cover, ERROR %s" % e)
