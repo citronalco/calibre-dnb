@@ -44,7 +44,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 2, 5)
+    version = (3, 2, 6)
     minimum_calibre_version = (3, 48, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -56,6 +56,7 @@ class DNB_DE(Source):
     cached_cover_url_is_reliable = True
     prefer_results_with_isbn = True
     ignore_ssl_errors = True
+    user_agent = 'calibre-dnb/%s' % '.'.join(map(str, version))
 
     MAXIMUMRECORDS = 10
     QUERYURL = 'https://services.dnb.de/sru/dnb?version=1.1&maximumRecords=%s&operation=searchRetrieve&recordSchema=MARC21-xml&query=%s'
