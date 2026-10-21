@@ -44,7 +44,7 @@ class DNB_DE(Source):
         'Downloads metadata from the DNB (Deutsche National Bibliothek).')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'Citronalco'
-    version = (3, 2, 6)
+    version = (3, 2, 7)
     minimum_calibre_version = (3, 48, 0)
 
     capabilities = frozenset(['identify', 'cover'])
